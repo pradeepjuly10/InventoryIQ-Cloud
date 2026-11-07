@@ -3,59 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Inventory CRM</title>
+<title>InventoryIQ</title>
 <!-- libraries: Supabase (database + login) and SheetJS (read Excel/CSV) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-:root{--bg:#eef2f8;--card:#fff;--ink:#15233b;--ink2:#55657f;--ink3:#8491a6;--line:#dde3ee;
+:root{
+  --bg:#eef2f8;--card:#fff;--ink:#15233b;--ink2:#55657f;--ink3:#8491a6;--line:#dde3ee;
   --blue:#2f6bf0;--navy:#12306e;--green:#15a86f;--amber:#ea8c17;--red:#e2483e;--purple:#7c54f2;
-  --shadow:0 1px 2px rgba(20,40,80,.06),0 6px 18px rgba(20,40,80,.08);--f:"Segoe UI",system-ui,Arial,sans-serif}
+  --side:#121a2e;--side2:#0d1424;--sideink:#aab6cc;--sideact:#2f6bf0;
+  --shadow:0 1px 2px rgba(20,40,80,.06),0 6px 18px rgba(20,40,80,.08);
+  --f:"Segoe UI",system-ui,Arial,sans-serif}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:13px}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:13px}
 .num{font-variant-numeric:tabular-nums}
 button{font:inherit;cursor:pointer}
 /* ---- login ---- */
-#login{min-height:100vh;display:grid;place-items:center;padding:20px}
-.lcard{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:30px 28px;width:360px;max-width:92vw}
-.lcard h1{font-size:21px;color:var(--navy);margin:0 0 4px}
+#login{min-height:100vh;display:grid;place-items:center;padding:20px;
+  background:linear-gradient(120deg,#12306e,#2f6bf0)}
+.lcard{background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:32px 28px;width:360px;max-width:92vw}
+.lbrand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.lbrand .logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff;font-weight:900;font-size:17px}
+.lbrand .t1{font-size:19px;font-weight:900;color:var(--navy)}
+.lbrand .t1 span{color:var(--blue)}
+.lbrand .t2{font-size:11px;color:var(--ink3)}
 .lcard p{color:var(--ink2);margin:0 0 18px;font-size:12.5px}
 .lcard label{display:block;font-size:11px;font-weight:700;color:var(--ink2);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
 .lcard input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit}
 .lcard button{width:100%;margin-top:18px;background:var(--blue);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:700}
 .msg{margin-top:12px;font-size:12px;min-height:16px}
 .msg.err{color:var(--red)} .msg.ok{color:var(--green)}
-/* ---- app ---- */
-#app{display:none}
-.top{background:linear-gradient(100deg,var(--navy),var(--blue));color:#fff;padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.top h1{font-size:18px;margin:0;font-weight:800}
-.top .sp{flex:1}
-.top .who{font-size:12px;color:#cfe0f7}
-.btn{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:8px 12px;font-weight:600;font-size:12.5px;display:inline-flex;gap:7px;align-items:center}
-.btn.green{background:#15a86f;border-color:#15a86f}
-.btn.ghost{background:transparent}
-.wrap{max-width:1300px;margin:0 auto;padding:18px}
-.bar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
-.fl{display:flex;flex-direction:column;gap:4px}
-.fl label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase}
-.fl select,.fl input{padding:8px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff;min-width:160px}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
-.kpi{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px;border-top:3px solid var(--blue)}
-.kpi .k{font-size:11.5px;color:var(--ink2);font-weight:600}
-.kpi .v{font-size:24px;font-weight:800;margin-top:5px}
+/* ---- app shell ---- */
+#app{display:none;min-height:100vh;grid-template-columns:224px 1fr}
+#app.on{display:grid}
+/* sidebar */
+.side{background:linear-gradient(180deg,var(--side),var(--side2));color:var(--sideink);
+  display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;align-self:start}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 16px 14px}
+.brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff;font-weight:900;font-size:16px;box-shadow:0 6px 16px rgba(47,107,240,.4)}
+.brand .t1{font-size:17px;font-weight:900;color:#fff;line-height:1}
+.brand .t1 span{color:#6ea2ff}
+.brand .t2{font-size:10.5px;color:#7f8ca6;margin-top:3px}
+.nav{padding:8px;display:flex;flex-direction:column;gap:2px;flex:1}
+.nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:var(--sideink);
+  text-decoration:none;font-size:13px;font-weight:600;border-left:3px solid transparent;transition:.12s}
+.nav a svg{width:18px;height:18px;flex:none;opacity:.85}
+.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav a.on{background:rgba(47,107,240,.18);color:#fff;border-left-color:var(--sideact)}
+.nav a.on svg{opacity:1}
+.sidefoot{padding:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:7px}
+.sidefoot .who{font-size:11px;color:#8695b0;padding:0 2px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbtn{display:flex;align-items:center;gap:8px;justify-content:center;background:rgba(255,255,255,.08);color:#dfe6f2;
+  border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:9px 10px;font-weight:700;font-size:12px}
+.sbtn.green{background:#15a86f;border-color:#15a86f;color:#fff}
+.sbtn:hover{filter:brightness(1.08)}
+/* main */
+.main{min-width:0;display:flex;flex-direction:column}
+.hero{background:linear-gradient(100deg,var(--navy),var(--blue));color:#fff;padding:18px 22px;
+  display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.hero .ht{flex:1;min-width:200px}
+.hero h2{margin:0;font-size:23px;font-weight:800}
+.hero .hs{font-size:12.5px;color:#cfe0f7;margin-top:3px}
+.hero .fl{display:flex;flex-direction:column;gap:4px}
+.hero .fl label{font-size:10px;font-weight:700;color:#bcd2f5;text-transform:uppercase;letter-spacing:.04em}
+.hero .fl select,.hero .fl input{padding:8px 10px;border:1px solid rgba(255,255,255,.3);border-radius:9px;font:inherit;
+  background:rgba(255,255,255,.14);color:#fff;min-width:150px}
+.hero .fl select option{color:#15233b}
+.hero .fl input::placeholder{color:#d7e3fa}
+.content{padding:18px 22px;flex:1}
+/* kpi gradient cards */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px}
+.kpi{border-radius:15px;padding:16px;color:#fff;box-shadow:var(--shadow);position:relative;overflow:hidden;min-height:116px}
+.kpi .ic{width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.22);display:grid;place-items:center;margin-bottom:10px}
+.kpi .ic svg{width:21px;height:21px}
+.kpi .k{font-size:12px;font-weight:700;opacity:.95}
+.kpi .v{font-size:25px;font-weight:900;margin-top:4px;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .d{font-size:11px;opacity:.92;margin-top:5px}
+.k-blue{background:linear-gradient(135deg,#3b82f6,#2563c9)}
+.k-green{background:linear-gradient(135deg,#19b37d,#12905f)}
+.k-amber{background:linear-gradient(135deg,#f3ab33,#e08310)}
+.k-red{background:linear-gradient(135deg,#f0635a,#d83a30)}
+.k-purple{background:linear-gradient(135deg,#9168f7,#7a4ff0)}
+/* action centre */
+.sechd{font-size:11.5px;font-weight:800;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin:4px 0 10px}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.act{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;
+  box-shadow:var(--shadow);padding:13px 14px;cursor:pointer;transition:.12s}
+.act:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(20,40,80,.14)}
+.act.red{border-left-color:var(--red)} .act.amber{border-left-color:var(--amber)}
+.act.purple{border-left-color:var(--purple)} .act.grey{border-left-color:#c3cdde;cursor:default;opacity:.7}
+.act .big{font-size:23px;font-weight:900;color:var(--ink)}
+.act .lb{font-size:12px;font-weight:700;margin-top:2px}
+.act .nt{font-size:11px;color:var(--ink3);margin-top:3px}
+/* cards & charts */
 .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px}
+.grid.one{grid-template-columns:1fr}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px;margin-bottom:16px}
 .card h3{margin:0 0 2px;font-size:14px}
 .card .sub{font-size:11px;color:var(--ink3);margin-bottom:10px}
 svg.chart{width:100%;height:auto;display:block;overflow:visible}
-.twrap{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:52vh}
+.twrap{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:58vh}
 table{border-collapse:collapse;width:100%;font-size:12px}
 thead th{position:sticky;top:0;background:var(--navy);color:#fff;text-align:left;padding:8px 10px;font-size:11px;white-space:nowrap}
 tbody td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 tbody tr:nth-child(even){background:#f7f9fd}
 td.r{text-align:right}
+.pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.pA{background:#e5f3ec;color:#12905f}.pB{background:#fdf0db;color:#b9700a}.pC{background:#fbe6e4;color:#c0362c}
 .cap{font-size:11px;color:var(--ink3);margin-top:8px}
-.hide{display:none}
+.empty{padding:40px 16px;text-align:center;color:var(--ink3)}
+.empty .em{font-size:40px;margin-bottom:8px}
+.empty h4{margin:0 0 6px;color:var(--ink2);font-size:15px}
+.note{background:#f0f5ff;border:1px solid #d6e4ff;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#2c4a86;margin-top:10px}
 /* import dialog */
 .scrim{position:fixed;inset:0;background:rgba(10,20,40,.45);display:none;place-items:center;z-index:50;padding:16px}
 .scrim.on{display:grid}
@@ -66,7 +126,14 @@ td.r{text-align:right}
 .dlg .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 .dlg .actions button{border-radius:9px;padding:9px 14px;font-weight:700;border:1px solid var(--line);background:#fff}
 .dlg .actions .go{background:var(--blue);color:#fff;border:none}
-@media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+@media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.acts{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+@media(max-width:720px){
+  #app.on{grid-template-columns:1fr}
+  .side{position:static;min-height:0}
+  .nav{flex-direction:row;overflow-x:auto;flex-wrap:nowrap}
+  .nav a{white-space:nowrap}
+  .kpis{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
@@ -74,7 +141,10 @@ td.r{text-align:right}
 <!-- ================= LOGIN ================= -->
 <div id="login">
   <form class="lcard" id="loginForm">
-    <h1>Inventory CRM</h1>
+    <div class="lbrand">
+      <div class="logo">IQ</div>
+      <div><div class="t1">Inventory<span>IQ</span></div><div class="t2">AI inventory intelligence</div></div>
+    </div>
     <p>Sign in to view and manage your inventory.</p>
     <label>Email</label>
     <input id="email" type="email" autocomplete="username" required>
@@ -87,38 +157,35 @@ td.r{text-align:right}
 
 <!-- ================= APP ================= -->
 <div id="app">
-  <header class="top">
-    <h1>Inventory CRM</h1>
-    <button class="btn green" id="importBtn">⭱ Import data</button>
-    <button class="btn" id="exportBtn">⭳ Export CSV</button>
-    <button class="btn" id="refreshBtn">↻ Refresh</button>
-    <div class="sp"></div>
-    <span class="who" id="who"></span>
-    <button class="btn ghost" id="logoutBtn">Sign out</button>
-  </header>
+  <!-- sidebar -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">IQ</div>
+      <div><div class="t1">Inventory<span>IQ</span></div><div class="t2">AI inventory intelligence</div></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidefoot">
+      <div class="who" id="who"></div>
+      <button class="sbtn green" id="importBtn">⭱ Import data</button>
+      <button class="sbtn" id="exportBtn">⭳ Export CSV</button>
+      <button class="sbtn" id="refreshBtn">↻ Refresh</button>
+      <button class="sbtn" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
 
-  <div class="wrap">
-    <div class="bar">
-      <div class="fl"><label>Month</label><select id="fMonth"><option value="ALL">All months</option></select></div>
+  <!-- main -->
+  <div class="main">
+    <header class="hero">
+      <div class="ht">
+        <h2 id="pgTitle">Overview</h2>
+        <div class="hs" id="pgSub">Stock position · movement · ageing · value</div>
+      </div>
       <div class="fl"><label>Plant</label><select id="fPlant"><option value="ALL">All plants</option></select></div>
+      <div class="fl"><label>Category</label><select id="fCat"><option value="ALL">All categories</option></select></div>
+      <div class="fl"><label>Month</label><select id="fMonth"><option value="ALL">All months</option></select></div>
       <div class="fl"><label>Search</label><input id="fSearch" placeholder="material / code / category…"></div>
-    </div>
-
-    <div class="kpis" id="kpis"></div>
-
-    <div class="grid">
-      <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ by location</div><div id="cPlant"></div></div>
-      <div class="card"><h3>Value by Category</h3><div class="sub">share of total</div><div id="cCat"></div></div>
-    </div>
-
-    <div class="card">
-      <h3>Inventory Details</h3><div class="sub">current view</div>
-      <div class="twrap"><table id="tbl"><thead><tr>
-        <th>Month</th><th>Item Code</th><th>Description</th><th>Plant</th><th>Category</th>
-        <th class="r">Qty</th><th class="r">Value (₹)</th><th>Last Movement</th>
-      </tr></thead><tbody id="tbody"></tbody></table></div>
-      <div class="cap" id="cap"></div>
-    </div>
+    </header>
+    <div class="content" id="content"></div>
   </div>
 </div>
 
@@ -127,7 +194,7 @@ td.r{text-align:right}
   <div class="dlg">
     <h3>Import inventory data</h3>
     <p>Choose a CSV or Excel file (.xlsx). Columns are recognised automatically
-       (Material, Plant Name, Stock Quantity, Value, Month, …).</p>
+       (Material, Plant Name, Stock Quantity, Value, Month, Last Movement …).</p>
     <div class="row"><input type="file" id="file" accept=".csv,.xlsx,.xls"></div>
     <div class="row"><label style="font-size:12.5px"><input type="checkbox" id="replace"> Replace ALL existing data first</label></div>
     <div class="msg" id="impMsg"></div>
@@ -140,18 +207,54 @@ td.r{text-align:right}
 
 <script>
 /* ============================================================================
-   STEP 1 — paste your Supabase project details here (Settings -> API):
+   Supabase project details (already filled in):
    ============================================================================ */
 const SUPABASE_URL  = "https://otivfbrxclvwofbcymay.supabase.co";
 const SUPABASE_ANON = "sb_publishable_zlPF5ZdyS3CggHIFdc4eZQ_yVTrU7s9";
-/* The anon key is SAFE to put here — it is a public key, and your data is
+/* The publishable/anon key is SAFE here — it is public, and your data is
    protected by the login + Row Level Security you set up in schema.sql. */
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const $ = s => document.querySelector(s);
-let ROWS = [];                              // all inventory rows loaded from the DB
+let ROWS = [];                 // all inventory rows from the DB
+let VIEW = "overview";         // active page
 
-/* ---- column recognition (their headers -> our fields) ---- */
+/* thresholds (change here anytime) */
+const AGE_SLOW = 90;           // days with no movement = slow-moving
+const AGE_RISK = 180;          // days with no movement = at-risk / toward obsolete
+
+/* ---------- icons (inline svg) ---------- */
+const IC = {
+  overview:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  value:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="13"/><line x1="22" y1="20" x2="2" y2="20"/></svg>',
+  ageing:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  stock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><line x1="12" y1="11" x2="12" y2="21"/></svg>',
+  trend:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,17 9,11 13,15 21,7"/><polyline points="15,7 21,7 21,13"/></svg>',
+  abc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/></svg>',
+  stockout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>',
+  forecast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15a4 4 0 0 1 4-4 5 5 0 0 1 9.6-1.5A3.5 3.5 0 1 1 18 18H7a4 4 0 0 1-4-3z"/></svg>',
+  details:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/></svg>',
+  rupee:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4h12M6 9h12M16 4c0 5-4 6-8 6l7 10"/></svg>',
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>',
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>',
+  warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+};
+
+/* ---------- menu ---------- */
+const MENU = [
+  ["overview","Overview","Stock position · movement · ageing · value"],
+  ["value","Inventory Value","Where your money is tied up"],
+  ["ageing","Ageing & Slow-Moving","How long stock has sat idle"],
+  ["stock","Stock Position","On-hand by plant & item"],
+  ["trend","Inventory Trend","Stock value over time"],
+  ["abc","Movement & ABC","A/B/C classification by value"],
+  ["stockout","Stock-out Risk","Items at risk of running out"],
+  ["forecast","Demand Forecast","Projected demand & reorder"],
+  ["details","Inventory Details","Full line-item table"]
+];
+
+/* ---------- column recognition ---------- */
 const ALIASES = {
   item_code:["material","item code","item_code","part no","part number","sku","code","item","item no","stock code"],
   description:["description","material description","item name","name","desc","item description"],
@@ -181,24 +284,26 @@ function toDate(v){
 }
 const n2 = v => { const x=parseFloat(String(v??"").replace(/,/g,"")); return isNaN(x)?0:x; };
 
-/* ---- formatting ---- */
+/* ---------- formatting ---------- */
 function rupee(n){const a=Math.abs(n);
   if(a>=1e7) return "₹"+(n/1e7).toFixed(2)+" Cr";
   if(a>=1e5) return "₹"+(n/1e5).toFixed(2)+" L";
   return "₹"+Math.round(n).toLocaleString("en-IN");}
 const inr = n => Math.round(n).toLocaleString("en-IN");
+const DAY = 86400000;
 
 /* ============================ AUTH ============================ */
 async function refreshAuthUI(){
   const {data} = await sb.auth.getSession();
   if(data.session){
     $("#login").style.display="none";
-    $("#app").style.display="block";
+    $("#app").classList.add("on");
     $("#who").textContent = data.session.user.email;
+    buildNav();
     await loadData();
   }else{
     $("#login").style.display="grid";
-    $("#app").style.display="none";
+    $("#app").classList.remove("on");
   }
 }
 $("#loginForm").addEventListener("submit", async e=>{
@@ -210,92 +315,304 @@ $("#loginForm").addEventListener("submit", async e=>{
 });
 $("#logoutBtn").onclick = async ()=>{ await sb.auth.signOut(); await refreshAuthUI(); };
 
+/* ============================ NAV ============================ */
+function buildNav(){
+  $("#nav").innerHTML = MENU.map(m=>
+    `<a href="#" data-v="${m[0]}" class="${m[0]===VIEW?'on':''}">${IC[m[0]]}<span>${m[1]}</span></a>`).join("");
+  $("#nav").querySelectorAll("a").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.v);});
+}
+function go(v){
+  VIEW=v;
+  $("#nav").querySelectorAll("a").forEach(a=>a.classList.toggle("on",a.dataset.v===v));
+  const m=MENU.find(x=>x[0]===v)||MENU[0];
+  $("#pgTitle").textContent=m[1]; $("#pgSub").textContent=m[2];
+  render();
+}
+
 /* ============================ DATA ============================ */
 async function loadData(){
-  const {data,error} = await sb.from("inventory").select("*").order("value",{ascending:false}).limit(5000);
-  if(error){ alert("Could not load data: "+error.message); return; }
+  const {data,error} = await sb.from("inventory").select("*").order("value",{ascending:false}).limit(8000);
+  if(error){ $("#content").innerHTML=`<div class="empty"><div class="em">⚠️</div><h4>Could not load data</h4><div>${error.message}</div></div>`; return; }
   ROWS = data||[];
   buildFilters(); render();
 }
 function buildFilters(){
   const months=[...new Set(ROWS.map(r=>r.month).filter(Boolean))].sort().reverse();
   const plants=[...new Set(ROWS.map(r=>r.plant).filter(Boolean))].sort();
-  const fm=$("#fMonth"), fp=$("#fPlant"), mv=fm.value, pv=fp.value;
+  const cats=[...new Set(ROWS.map(r=>r.category).filter(Boolean))].sort();
+  const fm=$("#fMonth"),fp=$("#fPlant"),fc=$("#fCat"),mv=fm.value,pv=fp.value,cv=fc.value;
   fm.innerHTML='<option value="ALL">All months</option>'+months.map(m=>`<option>${m}</option>`).join("");
   fp.innerHTML='<option value="ALL">All plants</option>'+plants.map(p=>`<option>${p}</option>`).join("");
-  fm.value = months.includes(mv)?mv:(months[0]||"ALL");   // default to newest month
+  fc.innerHTML='<option value="ALL">All categories</option>'+cats.map(c=>`<option>${c}</option>`).join("");
+  fm.value = months.includes(mv)?mv:"ALL";
   fp.value = plants.includes(pv)?pv:"ALL";
+  fc.value = cats.includes(cv)?cv:"ALL";
 }
-function current(){
-  const m=$("#fMonth").value, p=$("#fPlant").value, q=norm($("#fSearch").value);
+/* rows after Plant+Category+Search (NOT month — month handled per view) */
+function base(){
+  const p=$("#fPlant").value,c=$("#fCat").value,q=norm($("#fSearch").value);
   return ROWS.filter(r=>
-    (m==="ALL"||r.month===m) && (p==="ALL"||r.plant===p) &&
+    (p==="ALL"||r.plant===p) && (c==="ALL"||r.category===c) &&
     (!q || (`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q)));
 }
+/* rows for the currently selected month (latest if ALL) within base() */
+function current(){
+  const rows=base();
+  const m=$("#fMonth").value;
+  if(m!=="ALL") return rows.filter(r=>r.month===m);
+  const months=[...new Set(rows.map(r=>r.month).filter(Boolean))].sort();
+  if(!months.length) return rows;                 // data has no month column
+  const latest=months[months.length-1];
+  return rows.filter(r=>r.month===latest);
+}
+function asOfDate(rows){
+  let mx=0; rows.forEach(r=>{if(r.last_movement){const t=Date.parse(r.last_movement); if(t>mx)mx=t;}});
+  return mx||Date.now();
+}
+function ageDays(r,asOf){ if(!r.last_movement)return null; return Math.floor((asOf-Date.parse(r.last_movement))/DAY); }
 
-/* ============================ RENDER ============================ */
+/* ============================ RENDER DISPATCH ============================ */
 function render(){
-  const rows=current();
+  if(!ROWS.length){
+    $("#content").innerHTML=`<div class="empty"><div class="em">📦</div><h4>No data yet</h4>
+      <div>Click <b>Import data</b> in the left menu and upload a stock file (.xlsx / .csv).</div></div>`;
+    return;
+  }
+  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,
+    abc:vABC,stockout:vStockout,forecast:vForecast,details:vDetails}[VIEW]||vOverview)();
+}
+
+/* ---------- OVERVIEW ---------- */
+function vOverview(){
+  const rows=current(), asOf=asOfDate(rows), hasMove=rows.some(r=>r.last_movement);
   const totV=rows.reduce((s,r)=>s+(+r.value||0),0);
   const totQ=rows.reduce((s,r)=>s+(+r.qty||0),0);
   const nItems=new Set(rows.map(r=>r.item_code+"|"+r.plant)).size;
-  const nPlants=new Set(rows.map(r=>r.plant)).size;
-  $("#kpis").innerHTML=[
-    ["Total Inventory Value",rupee(totV)],["Total Stock Qty",inr(totQ)],
-    ["No. of Items",inr(nItems)],["Plants",inr(nPlants)]
-  ].map(k=>`<div class="kpi"><div class="k">${k[0]}</div><div class="v num">${k[1]}</div></div>`).join("");
 
-  const byP={}, byC={};
-  rows.forEach(r=>{byP[r.plant||"—"]=(byP[r.plant||"—"]||0)+(+r.value||0);
-                   byC[r.category||"—"]=(byC[r.category||"—"]||0)+(+r.value||0);});
-  bars("#cPlant", Object.entries(byP).sort((a,b)=>b[1]-a[1]).slice(0,14));
-  donut("#cCat", Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,8));
+  // slow / at-risk via ageing
+  let slowN=0,slowV=0,riskV=0,aged90V=0;
+  rows.forEach(r=>{const d=ageDays(r,asOf); if(d==null)return;
+    if(d>=AGE_SLOW){slowN++;slowV+=(+r.value||0);}
+    if(d>=AGE_SLOW)aged90V+=(+r.value||0);
+    if(d>=AGE_RISK)riskV+=(+r.value||0);});
 
-  $("#tbody").innerHTML=rows.slice(0,500).map(r=>`<tr>
-    <td>${r.month||""}</td><td>${r.item_code||""}</td><td>${r.description||""}</td>
-    <td>${r.plant||""}</td><td>${r.category||""}</td>
-    <td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td>
-    <td>${r.last_movement||""}</td></tr>`).join("");
-  $("#cap").textContent=`Showing ${Math.min(rows.length,500)} of ${rows.length} rows in this view.`;
+  // MoM on value (base across all months for selected plant/cat)
+  const bm={}; base().forEach(r=>{if(r.month)bm[r.month]=(bm[r.month]||0)+(+r.value||0);});
+  const ms=Object.keys(bm).sort(); let mom=null;
+  if(ms.length>=2){const a=bm[ms[ms.length-1]],b=bm[ms[ms.length-2]]; if(b)mom=(a-b)/b*100;}
+  const momTxt = mom==null?"· across all plants":`${mom>=0?"▲":"▼"} ${Math.abs(mom).toFixed(1)}% vs last month`;
+
+  const kpi=(cls,icon,k,v,d)=>`<div class="kpi ${cls}"><div class="ic">${icon}</div>
+    <div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
+  const kpis=`<div class="kpis">
+    ${kpi("k-blue",IC.rupee,"Total Inventory Value",rupee(totV),momTxt)}
+    ${kpi("k-green",IC.box,"Total Stock Quantity",inr(totQ),"units on hand")}
+    ${kpi("k-amber",IC.list,"No. of Materials",inr(nItems),"distinct item-plant lines")}
+    ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d`:"needs last-movement date")}
+    ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · > ${AGE_SLOW}d`:"needs last-movement date")}
+  </div>`;
+
+  // action centre
+  const zeroN=rows.filter(r=>(+r.qty||0)<=0).length;
+  const noDateN=rows.filter(r=>!r.last_movement).length;
+  const acts=`<div class="sechd">Action Centre — tap a card to dig in</div><div class="acts">
+    <div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(aged90V):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>
+    <div class="act red" onclick="go('ageing')"><div class="big num">${hasMove?rupee(riskV):"—"}</div><div class="lb">Toward obsolete</div><div class="nt">no movement > ${AGE_RISK} days</div></div>
+    <div class="act purple" onclick="go('abc')"><div class="big num">${inr(nItems)}</div><div class="lb">Items to classify</div><div class="nt">A / B / C by value</div></div>
+    <div class="act grey"><div class="big num">${inr(zeroN)}</div><div class="lb">Zero / negative qty</div><div class="nt">${noDateN?inr(noDateN)+" missing movement date":"review in Details"}</div></div>
+  </div>`;
+
+  const byP=agg(rows,"plant"), byC=agg(rows,"category");
+  const charts=`<div class="grid">
+    <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
+    <div class="card"><h3>Value by Category</h3><div class="sub">share of total stock value</div><div id="cCat"></div></div>
+  </div>`;
+
+  $("#content").innerHTML=kpis+acts+charts;
+  bars("#cPlant",byP.slice(0,12)); donut("#cCat",byC.slice(0,8));
 }
+
+/* ---------- INVENTORY VALUE ---------- */
+function vValue(){
+  const rows=current();
+  const byP=agg(rows,"plant"), byC=agg(rows,"category");
+  const top=[...rows].sort((a,b)=>(+b.value||0)-(+a.value||0)).slice(0,20);
+  $("#content").innerHTML=`
+    <div class="grid">
+      <div class="card"><h3>Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
+      <div class="card"><h3>Value by Category</h3><div class="sub">share of total</div><div id="cCat"></div></div>
+    </div>
+    <div class="card"><h3>Top 20 items by value</h3><div class="sub">where the money is tied up</div>
+      <div class="twrap"><table><thead><tr><th>Item Code</th><th>Description</th><th>Plant</th><th>Category</th><th class="r">Qty</th><th class="r">Value (₹)</th></tr></thead>
+      <tbody>${top.map(r=>`<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td>${r.category||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td></tr>`).join("")}</tbody></table></div>
+    </div>`;
+  bars("#cPlant",byP.slice(0,12)); donut("#cCat",byC.slice(0,8));
+}
+
+/* ---------- AGEING ---------- */
+function vAgeing(){
+  const rows=current(), asOf=asOfDate(rows), hasMove=rows.some(r=>r.last_movement);
+  if(!hasMove){ $("#content").innerHTML=needsCol("last-movement date",
+     "Your stock file has no Last Movement column, so ageing can't be calculated. Add a <b>Last Movement Date</b> column to each item and re-import — this page then fills in automatically."); return; }
+  const B=[["0–45 days",0,45,"#15a86f"],["45–90 days",45,90,"#8bc34a"],["90–180 days",90,180,"#ea8c17"],["180–365 days",180,365,"#f0635a"],["365+ days",365,1e9,"#c0362c"],["No movement date",-1,-1,"#9aa7bd"]];
+  const buck=B.map(b=>({lb:b[0],col:b[3],v:0,n:0}));
+  rows.forEach(r=>{const d=ageDays(r,asOf); let i;
+    if(d==null)i=5; else i=B.findIndex(b=>b[1]>=0&&d>=b[1]&&d<b[2]);
+    if(i<0)i=4; buck[i].v+=(+r.value||0); buck[i].n++;});
+  const ras=new Date(asOf).toISOString().slice(0,10);
+  $("#content").innerHTML=`
+    <div class="card one"><h3>Stock value by age band</h3><div class="sub">days since last movement · as on ${ras}</div><div id="cAge"></div></div>
+    <div class="card"><h3>Ageing breakdown</h3><div class="sub">value & item count per band</div>
+      <div class="twrap"><table><thead><tr><th>Age band</th><th class="r">Items</th><th class="r">Value (₹)</th><th class="r">% of value</th></tr></thead>
+      <tbody>${(()=>{const T=buck.reduce((s,b)=>s+b.v,0)||1;return buck.map(b=>`<tr><td>${b.lb}</td><td class="r num">${inr(b.n)}</td><td class="r num">${inr(b.v)}</td><td class="r num">${(b.v/T*100).toFixed(1)}%</td></tr>`).join("");})()}</tbody></table></div>
+      <div class="note">Items with no movement for more than <b>${AGE_RISK} days</b> are strong candidates for review — redeploy, liquidate, or stop re-ordering.</div>
+    </div>`;
+  barsColored("#cAge",buck.map(b=>[b.lb,b.v,b.col]));
+}
+
+/* ---------- STOCK POSITION ---------- */
+function vStock(){
+  const rows=current();
+  const byP={}; rows.forEach(r=>{const p=r.plant||"—";(byP[p]=byP[p]||{q:0,v:0,n:0});byP[p].q+=(+r.qty||0);byP[p].v+=(+r.value||0);byP[p].n++;});
+  const list=Object.entries(byP).sort((a,b)=>b[1].v-a[1].v);
+  $("#content").innerHTML=`
+    <div class="card"><h3>On-hand by plant</h3><div class="sub">quantity & value per location</div>
+      <div class="twrap"><table><thead><tr><th>Plant</th><th class="r">Item lines</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th></tr></thead>
+      <tbody>${list.map(([p,o])=>`<tr><td>${p}</td><td class="r num">${inr(o.n)}</td><td class="r num">${inr(o.q)}</td><td class="r num">${inr(o.v)}</td></tr>`).join("")}</tbody></table></div>
+    </div>
+    <div class="card one"><h3>Stock quantity by plant</h3><div class="sub">units on hand</div><div id="cQty"></div></div>`;
+  barsRaw("#cQty",list.map(([p,o])=>[p,o.q]));
+}
+
+/* ---------- TREND ---------- */
+function vTrend(){
+  const rows=base();
+  const bm={}; rows.forEach(r=>{if(r.month){const o=bm[r.month]=bm[r.month]||{v:0,q:0};o.v+=(+r.value||0);o.q+=(+r.qty||0);}});
+  const ms=Object.keys(bm).sort();
+  if(ms.length<2){ $("#content").innerHTML=needsCol("more than one month",
+     "Stock-value trend needs at least two monthly snapshots. Import a stock file for each month (each file carrying its <b>Month</b> date) and this line chart will grow month by month."); return; }
+  $("#content").innerHTML=`
+    <div class="card one"><h3>Inventory value over time</h3><div class="sub">total stock value per month</div><div id="cLine"></div></div>
+    <div class="card"><h3>Month-by-month</h3><div class="sub">value & quantity</div>
+      <div class="twrap"><table><thead><tr><th>Month</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th><th class="r">MoM %</th></tr></thead>
+      <tbody>${ms.map((m,i)=>{const v=bm[m].v,pv=i?bm[ms[i-1]].v:0,ch=i&&pv?((v-pv)/pv*100):null;return `<tr><td>${m}</td><td class="r num">${inr(bm[m].q)}</td><td class="r num">${inr(v)}</td><td class="r num">${ch==null?"—":(ch>=0?"+":"")+ch.toFixed(1)+"%"}</td></tr>`;}).join("")}</tbody></table></div>
+    </div>`;
+  line("#cLine",ms.map(m=>[m,bm[m].v]));
+}
+
+/* ---------- MOVEMENT & ABC ---------- */
+function vABC(){
+  const rows=current();
+  const items=[...rows].map(r=>({...r,value:+r.value||0})).sort((a,b)=>b.value-a.value);
+  const T=items.reduce((s,r)=>s+r.value,0)||1; let cum=0;
+  items.forEach(r=>{cum+=r.value; r._cp=cum/T*100; r._cls=r._cp<=70?"A":r._cp<=90?"B":"C";});
+  const grp={A:{n:0,v:0},B:{n:0,v:0},C:{n:0,v:0}};
+  items.forEach(r=>{grp[r._cls].n++;grp[r._cls].v+=r.value;});
+  $("#content").innerHTML=`
+    <div class="grid">
+      <div class="card"><h3>ABC by value</h3><div class="sub">A = top 70% of value · B = next 20% · C = last 10%</div>
+        <div class="twrap"><table><thead><tr><th>Class</th><th class="r">Items</th><th class="r">Value (₹)</th><th class="r">% of value</th></tr></thead>
+        <tbody>${["A","B","C"].map(c=>`<tr><td><span class="pill p${c}">${c}</span></td><td class="r num">${inr(grp[c].n)}</td><td class="r num">${inr(grp[c].v)}</td><td class="r num">${(grp[c].v/T*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div>
+        <div class="note"><b>Class A</b> items are few but hold most of your money — watch them closely. <b>Class C</b> are many but low value — simpler controls are fine.</div>
+      </div>
+      <div class="card"><h3>Value share</h3><div class="sub">A / B / C</div><div id="cAbc"></div></div>
+    </div>
+    <div class="card"><h3>Items (ranked by value)</h3><div class="sub">top 100</div>
+      <div class="twrap"><table><thead><tr><th>#</th><th>Class</th><th>Item Code</th><th>Description</th><th>Plant</th><th class="r">Value (₹)</th><th class="r">Cum %</th></tr></thead>
+      <tbody>${items.slice(0,100).map((r,i)=>`<tr><td>${i+1}</td><td><span class="pill p${r._cls}">${r._cls}</span></td><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td class="r num">${inr(r.value)}</td><td class="r num">${r._cp.toFixed(1)}%</td></tr>`).join("")}</tbody></table></div>
+    </div>`;
+  donut("#cAbc",[["A",grp.A.v],["B",grp.B.v],["C",grp.C.v]]);
+}
+
+/* ---------- STOCK-OUT (needs consumption) ---------- */
+function vStockout(){
+  $("#content").innerHTML=needsCol("consumption / goods-issue data",
+   "Stock-out risk compares how fast each item is used against what's on hand. That needs <b>consumption (goods-issued)</b> figures, which this cloud app doesn't hold yet. When you're ready, we can add a consumption upload and switch this page on — the layout is already reserved for it.");
+}
+/* ---------- FORECAST (needs consumption) ---------- */
+function vForecast(){
+  $("#content").innerHTML=needsCol("consumption history",
+   "Demand forecast projects future usage from past <b>consumption</b>. Once consumption history is added to the cloud app, this page will show projected demand and suggested reorder points. It's ready to switch on when you want the feature.");
+}
+
+/* ---------- DETAILS ---------- */
+function vDetails(){
+  const rows=current().sort((a,b)=>(+b.value||0)-(+a.value||0));
+  $("#content").innerHTML=`<div class="card"><h3>Inventory details</h3><div class="sub">current view · ${inr(rows.length)} rows</div>
+    <div class="twrap"><table><thead><tr><th>Month</th><th>Item Code</th><th>Description</th><th>Plant</th><th>Category</th><th class="r">Qty</th><th class="r">Value (₹)</th><th>Last Movement</th></tr></thead>
+    <tbody>${rows.slice(0,800).map(r=>`<tr><td>${r.month||""}</td><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td>${r.category||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${r.last_movement||""}</td></tr>`).join("")}</tbody></table></div>
+    <div class="cap">Showing ${Math.min(rows.length,800)} of ${inr(rows.length)} rows. Use the filters above or Export CSV for the full set.</div></div>`;
+}
+
+/* ---------- helpers ---------- */
+function agg(rows,key){const o={};rows.forEach(r=>{const k=r[key]||"—";o[k]=(o[k]||0)+(+r.value||0);});return Object.entries(o).sort((a,b)=>b[1]-a[1]);}
+function needsCol(what,html){return `<div class="card"><div class="empty"><div class="em">🔒</div>
+  <h4>This page needs ${what}</h4><div style="max-width:560px;margin:0 auto">${html}</div></div></div>`;}
+
 const PAL=["#2563c9","#e08a1e","#159f6e","#7a5af0","#1597a6","#d8443a","#9aa7bd","#c9792b",
            "#3b82f6","#f6a823","#1fc17d","#9168f7","#2bb8c9","#ff6b7f"];
-function bars(id,data){
-  const host=$(id); host.innerHTML="";
-  if(!data.length){host.innerHTML='<div class="cap">No data.</div>';return;}
-  const W=Math.max(360,host.clientWidth||600),rot=data.length>6,B=rot?92:46,H=rot?320:260,L=46,R=12,Tp=22;
-  const mx=Math.max(1,...data.map(d=>d[1]/1e7));
+/* value bars (₹ in Cr) */
+function bars(id,data){ drawBars(id,data,v=>v/1e7,v=>rupee(v),(v)=>v.toFixed(1),PAL,null); }
+function barsColored(id,data){ drawBars(id,data.map(d=>[d[0],d[1]]),v=>v/1e7,v=>rupee(v),v=>v.toFixed(1),null,data.map(d=>d[2])); }
+function barsRaw(id,data){ drawBars(id,data,v=>v,v=>inr(v),v=>fmtK(v),PAL,null); }  // qty bars
+function fmtK(v){return v>=1e5?(v/1e5).toFixed(1)+"L":v>=1e3?(v/1e3).toFixed(1)+"k":Math.round(v);}
+function drawBars(id,data,scale,tip,lab,pal,cols){
+  const host=$(id); if(!host)return; host.innerHTML="";
+  if(!data.length){host.innerHTML='<div class="cap">No data in this view.</div>';return;}
+  const W=Math.max(360,host.clientWidth||600),rot=data.length>6,B=rot?104:48,H=rot?330:260,L=52,R=12,Tp=22;
+  const sc=data.map(d=>scale(d[1])),mx=Math.max(1,...sc);
   let svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
   for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;svg+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#e3e9f3"/>`+
-    `<text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#8491a6">${(mx*(1-i/4)).toFixed(0)}</text>`;}
-  const slot=(W-L-R)/data.length,bw=Math.min(46,slot*0.5);
-  data.forEach((d,i)=>{const v=d[1]/1e7,h=(H-Tp-B)*(v/mx),cx=L+slot*i+slot/2,x=cx-bw/2,y=H-B-h;
-    svg+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="5" fill="${PAL[i%PAL.length]}"><title>${d[0]}: ${rupee(d[1])}</title></rect>`;
-    svg+=`<text x="${cx}" y="${y-6}" text-anchor="middle" font-size="12" font-weight="700" fill="#15233b">${v.toFixed(1)}</text>`;
-    const nm=(d[0].length>18?d[0].slice(0,17)+"…":d[0]), ny=H-B+(rot?14:20);
+    `<text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#8491a6">${(mx*(1-i/4)).toFixed(mx<10?1:0)}</text>`;}
+  const slot=(W-L-R)/data.length,bw=Math.min(48,slot*0.55);
+  data.forEach((d,i)=>{const v=sc[i],h=(H-Tp-B)*(v/mx),cx=L+slot*i+slot/2,x=cx-bw/2,y=H-B-h,col=cols?cols[i]:pal[i%pal.length];
+    svg+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="5" fill="${col}"><title>${d[0]}: ${tip(d[1])}</title></rect>`;
+    svg+=`<text x="${cx}" y="${y-6}" text-anchor="middle" font-size="12" font-weight="700" fill="#15233b">${lab(v)}</text>`;
+    const nm=(d[0].length>16?d[0].slice(0,15)+"…":d[0]),ny=H-B+(rot?15:20);
     svg+=rot?`<text x="${cx}" y="${ny}" transform="rotate(-35 ${cx} ${ny})" text-anchor="end" font-size="11" fill="#55657f">${nm}</text>`
             :`<text x="${cx}" y="${ny}" text-anchor="middle" font-size="12" fill="#55657f">${nm}</text>`;});
   host.innerHTML=svg+"</svg>";
 }
 function donut(id,data){
-  const host=$(id); host.innerHTML="";
-  const tot=data.reduce((s,d)=>s+d[1],0)||1;
+  const host=$(id); if(!host)return; host.innerHTML="";
+  data=data.filter(d=>d[1]>0); const tot=data.reduce((s,d)=>s+d[1],0)||1;
   const W=Math.max(300,host.clientWidth||360),H=260,cx=W/2,cy=H/2,rO=Math.min(110,H/2-14),rI=rO*0.6;
   let a=-Math.PI/2,svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`,lg="";
   data.forEach((d,i)=>{const f=d[1]/tot,a2=a+f*2*Math.PI;
     const x1=cx+rO*Math.cos(a),y1=cy+rO*Math.sin(a),x2=cx+rO*Math.cos(a2),y2=cy+rO*Math.sin(a2);
     const xi2=cx+rI*Math.cos(a2),yi2=cy+rI*Math.sin(a2),xi1=cx+rI*Math.cos(a),yi1=cy+rI*Math.sin(a);
     const laf=f>.5?1:0;
-    svg+=`<path d="M${x1} ${y1} A${rO} ${rO} 0 ${laf} 1 ${x2} ${y2} L${xi2} ${yi2} A${rI} ${rI} 0 ${laf} 0 ${xi1} ${yi1} Z" fill="${PAL[i%PAL.length]}"><title>${d[0]}: ${rupee(d[1])}</title></path>`;
+    svg+=`<path d="M${x1} ${y1} A${rO} ${rO} 0 ${laf} 1 ${x2} ${y2} L${xi2} ${yi2} A${rI} ${rI} 0 ${laf} 0 ${xi1} ${yi1} Z" fill="${PAL[i%PAL.length]}"><title>${d[0]}: ${rupee(d[1])} (${(f*100).toFixed(1)}%)</title></path>`;
     lg+=`<span style="display:inline-flex;align-items:center;gap:5px;margin:3px 10px 0 0;font-size:11.5px;color:#55657f"><i style="width:10px;height:10px;border-radius:3px;background:${PAL[i%PAL.length]};display:inline-block"></i>${d[0]}</span>`;
     a=a2;});
   svg+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="18" font-weight="800" fill="#15233b">${rupee(tot)}</text>`;
   svg+=`<text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="11" fill="#8491a6">total</text></svg>`;
   host.innerHTML=svg+`<div style="margin-top:8px">${lg}</div>`;
 }
-["fMonth","fPlant"].forEach(id=>$("#"+id).addEventListener("change",render));
+function line(id,data){
+  const host=$(id); if(!host)return; host.innerHTML="";
+  const W=Math.max(360,host.clientWidth||700),H=300,L=56,R=16,B=46,Tp=20;
+  const vs=data.map(d=>d[1]/1e7),mx=Math.max(1,...vs),mn=Math.min(...vs,0);
+  const X=i=>L+(W-L-R)*(data.length<2?0.5:i/(data.length-1));
+  const Y=v=>Tp+(H-Tp-B)*(1-(v-mn)/((mx-mn)||1));
+  let svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4,val=mx-(mx-mn)*i/4;
+    svg+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#e3e9f3"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#8491a6">${val.toFixed(1)}</text>`;}
+  let pts=data.map((d,i)=>`${X(i)},${Y(vs[i])}`).join(" ");
+  svg+=`<polyline points="${pts}" fill="none" stroke="#2f6bf0" stroke-width="2.5"/>`;
+  svg+=`<polygon points="${L},${H-B} ${pts} ${X(data.length-1)},${H-B}" fill="#2f6bf0" opacity="0.08"/>`;
+  data.forEach((d,i)=>{svg+=`<circle cx="${X(i)}" cy="${Y(vs[i])}" r="4" fill="#2f6bf0"><title>${d[0]}: ${rupee(d[1])}</title></circle>`;
+    svg+=`<text x="${X(i)}" y="${Y(vs[i])-10}" text-anchor="middle" font-size="11" font-weight="700" fill="#15233b">${vs[i].toFixed(1)}</text>`;
+    svg+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="#55657f">${d[0]}</text>`;});
+  host.innerHTML=svg+"</svg>";
+}
+
+/* filters re-render */
+["fMonth","fPlant","fCat"].forEach(id=>$("#"+id).addEventListener("change",render));
 $("#fSearch").addEventListener("input",render);
 $("#refreshBtn").onclick=loadData;
+window.addEventListener("resize",()=>{clearTimeout(window._rz);window._rz=setTimeout(render,200);});
+window.go=go;
 
 /* ============================ IMPORT ============================ */
 $("#importBtn").onclick=()=>{$("#impMsg").textContent="";$("#file").value="";$("#replace").checked=false;$("#scrim").classList.add("on");};
