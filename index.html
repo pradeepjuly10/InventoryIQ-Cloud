@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inventory CRM</title>
+<!-- libraries: Supabase (database + login) and SheetJS (read Excel/CSV) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#eef2f8;--card:#fff;--ink:#15233b;--ink2:#55657f;--ink3:#8491a6;--line:#dde3ee;
+  --blue:#2f6bf0;--navy:#12306e;--green:#15a86f;--amber:#ea8c17;--red:#e2483e;--purple:#7c54f2;
+  --shadow:0 1px 2px rgba(20,40,80,.06),0 6px 18px rgba(20,40,80,.08);--f:"Segoe UI",system-ui,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:13px}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+/* ---- login ---- */
+#login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.lcard{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:30px 28px;width:360px;max-width:92vw}
+.lcard h1{font-size:21px;color:var(--navy);margin:0 0 4px}
+.lcard p{color:var(--ink2);margin:0 0 18px;font-size:12.5px}
+.lcard label{display:block;font-size:11px;font-weight:700;color:var(--ink2);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.lcard input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit}
+.lcard button{width:100%;margin-top:18px;background:var(--blue);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:700}
+.msg{margin-top:12px;font-size:12px;min-height:16px}
+.msg.err{color:var(--red)} .msg.ok{color:var(--green)}
+/* ---- app ---- */
+#app{display:none}
+.top{background:linear-gradient(100deg,var(--navy),var(--blue));color:#fff;padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top h1{font-size:18px;margin:0;font-weight:800}
+.top .sp{flex:1}
+.top .who{font-size:12px;color:#cfe0f7}
+.btn{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:8px 12px;font-weight:600;font-size:12.5px;display:inline-flex;gap:7px;align-items:center}
+.btn.green{background:#15a86f;border-color:#15a86f}
+.btn.ghost{background:transparent}
+.wrap{max-width:1300px;margin:0 auto;padding:18px}
+.bar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
+.fl{display:flex;flex-direction:column;gap:4px}
+.fl label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase}
+.fl select,.fl input{padding:8px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff;min-width:160px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px;border-top:3px solid var(--blue)}
+.kpi .k{font-size:11.5px;color:var(--ink2);font-weight:600}
+.kpi .v{font-size:24px;font-weight:800;margin-top:5px}
+.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px}
+.card h3{margin:0 0 2px;font-size:14px}
+.card .sub{font-size:11px;color:var(--ink3);margin-bottom:10px}
+svg.chart{width:100%;height:auto;display:block;overflow:visible}
+.twrap{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:52vh}
+table{border-collapse:collapse;width:100%;font-size:12px}
+thead th{position:sticky;top:0;background:var(--navy);color:#fff;text-align:left;padding:8px 10px;font-size:11px;white-space:nowrap}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:nth-child(even){background:#f7f9fd}
+td.r{text-align:right}
+.cap{font-size:11px;color:var(--ink3);margin-top:8px}
+.hide{display:none}
+/* import dialog */
+.scrim{position:fixed;inset:0;background:rgba(10,20,40,.45);display:none;place-items:center;z-index:50;padding:16px}
+.scrim.on{display:grid}
+.dlg{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px;width:460px;max-width:94vw}
+.dlg h3{margin:0 0 10px;color:var(--navy)}
+.dlg p{font-size:12.5px;color:var(--ink2)}
+.dlg .row{display:flex;gap:10px;align-items:center;margin:12px 0}
+.dlg .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.dlg .actions button{border-radius:9px;padding:9px 14px;font-weight:700;border:1px solid var(--line);background:#fff}
+.dlg .actions .go{background:var(--blue);color:#fff;border:none}
+@media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login">
+  <form class="lcard" id="loginForm">
+    <h1>Inventory CRM</h1>
+    <p>Sign in to view and manage your inventory.</p>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label>Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="loginBtn">Sign in</button>
+    <div class="msg" id="loginMsg"></div>
+  </form>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <header class="top">
+    <h1>Inventory CRM</h1>
+    <button class="btn green" id="importBtn">⭱ Import data</button>
+    <button class="btn" id="exportBtn">⭳ Export CSV</button>
+    <button class="btn" id="refreshBtn">↻ Refresh</button>
+    <div class="sp"></div>
+    <span class="who" id="who"></span>
+    <button class="btn ghost" id="logoutBtn">Sign out</button>
+  </header>
+
+  <div class="wrap">
+    <div class="bar">
+      <div class="fl"><label>Month</label><select id="fMonth"><option value="ALL">All months</option></select></div>
+      <div class="fl"><label>Plant</label><select id="fPlant"><option value="ALL">All plants</option></select></div>
+      <div class="fl"><label>Search</label><input id="fSearch" placeholder="material / code / category…"></div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid">
+      <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ by location</div><div id="cPlant"></div></div>
+      <div class="card"><h3>Value by Category</h3><div class="sub">share of total</div><div id="cCat"></div></div>
+    </div>
+
+    <div class="card">
+      <h3>Inventory Details</h3><div class="sub">current view</div>
+      <div class="twrap"><table id="tbl"><thead><tr>
+        <th>Month</th><th>Item Code</th><th>Description</th><th>Plant</th><th>Category</th>
+        <th class="r">Qty</th><th class="r">Value (₹)</th><th>Last Movement</th>
+      </tr></thead><tbody id="tbody"></tbody></table></div>
+      <div class="cap" id="cap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- import dialog -->
+<div class="scrim" id="scrim">
+  <div class="dlg">
+    <h3>Import inventory data</h3>
+    <p>Choose a CSV or Excel file (.xlsx). Columns are recognised automatically
+       (Material, Plant Name, Stock Quantity, Value, Month, …).</p>
+    <div class="row"><input type="file" id="file" accept=".csv,.xlsx,.xls"></div>
+    <div class="row"><label style="font-size:12.5px"><input type="checkbox" id="replace"> Replace ALL existing data first</label></div>
+    <div class="msg" id="impMsg"></div>
+    <div class="actions">
+      <button id="impCancel">Cancel</button>
+      <button class="go" id="impGo">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   STEP 1 — paste your Supabase project details here (Settings -> API):
+   ============================================================================ */
+const SUPABASE_URL  = "https://otivfbrxclvwofbcymay.supabase.co";
+const SUPABASE_ANON = "sb_publishable_zlPF5ZdyS3CggHIFdc4eZQ_yVTrU7s9";
+/* The anon key is SAFE to put here — it is a public key, and your data is
+   protected by the login + Row Level Security you set up in schema.sql. */
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const $ = s => document.querySelector(s);
+let ROWS = [];                              // all inventory rows loaded from the DB
+
+/* ---- column recognition (their headers -> our fields) ---- */
+const ALIASES = {
+  item_code:["material","item code","item_code","part no","part number","sku","code","item","item no","stock code"],
+  description:["description","material description","item name","name","desc","item description"],
+  plant:["plant name","plant","location","site","warehouse","store","godown","branch","depot","unit"],
+  category:["material group description","material type description","category","material group","group","type","class","item group"],
+  qty:["stock quantity (end period)","qty on hand","quantity","qty","stock","on hand","closing stock","current stock","balance","soh"],
+  value:["stock value (end period)","stock value","value","amount","total value","closing value","final","cost"],
+  unit_value:["unit value","unit price","price","rate","unit cost","moving avg price","valuation price","map","std price"],
+  month:["month","period","snapshot month","period end","as on","as of date","date"],
+  last_movement:["last movement date","last movement","last issue date","last issue","last goods movement","last moved","last txn date"]
+};
+const norm = h => (h==null?"":String(h).trim().toLowerCase().replace(/\s+/g," "));
+function pickCol(headers, field){
+  const H = headers.map(norm);
+  for(const a of ALIASES[field]){const i=H.indexOf(a); if(i>=0) return headers[i];}
+  return null;
+}
+function toDate(v){
+  if(v==null||v==="") return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  const s=String(v).trim();
+  let m=s.match(/(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]||"01").padStart(2,"0")}`;
+  m=s.match(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if(m) return `${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
+  const d=new Date(s); return isNaN(d)?null:d.toISOString().slice(0,10);
+}
+const n2 = v => { const x=parseFloat(String(v??"").replace(/,/g,"")); return isNaN(x)?0:x; };
+
+/* ---- formatting ---- */
+function rupee(n){const a=Math.abs(n);
+  if(a>=1e7) return "₹"+(n/1e7).toFixed(2)+" Cr";
+  if(a>=1e5) return "₹"+(n/1e5).toFixed(2)+" L";
+  return "₹"+Math.round(n).toLocaleString("en-IN");}
+const inr = n => Math.round(n).toLocaleString("en-IN");
+
+/* ============================ AUTH ============================ */
+async function refreshAuthUI(){
+  const {data} = await sb.auth.getSession();
+  if(data.session){
+    $("#login").style.display="none";
+    $("#app").style.display="block";
+    $("#who").textContent = data.session.user.email;
+    await loadData();
+  }else{
+    $("#login").style.display="grid";
+    $("#app").style.display="none";
+  }
+}
+$("#loginForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const msg=$("#loginMsg"); msg.className="msg"; msg.textContent="Signing in…";
+  const {error} = await sb.auth.signInWithPassword({email:$("#email").value.trim(), password:$("#password").value});
+  if(error){ msg.className="msg err"; msg.textContent=error.message; }
+  else { msg.className="msg ok"; msg.textContent="Welcome!"; await refreshAuthUI(); }
+});
+$("#logoutBtn").onclick = async ()=>{ await sb.auth.signOut(); await refreshAuthUI(); };
+
+/* ============================ DATA ============================ */
+async function loadData(){
+  const {data,error} = await sb.from("inventory").select("*").order("value",{ascending:false}).limit(5000);
+  if(error){ alert("Could not load data: "+error.message); return; }
+  ROWS = data||[];
+  buildFilters(); render();
+}
+function buildFilters(){
+  const months=[...new Set(ROWS.map(r=>r.month).filter(Boolean))].sort().reverse();
+  const plants=[...new Set(ROWS.map(r=>r.plant).filter(Boolean))].sort();
+  const fm=$("#fMonth"), fp=$("#fPlant"), mv=fm.value, pv=fp.value;
+  fm.innerHTML='<option value="ALL">All months</option>'+months.map(m=>`<option>${m}</option>`).join("");
+  fp.innerHTML='<option value="ALL">All plants</option>'+plants.map(p=>`<option>${p}</option>`).join("");
+  fm.value = months.includes(mv)?mv:(months[0]||"ALL");   // default to newest month
+  fp.value = plants.includes(pv)?pv:"ALL";
+}
+function current(){
+  const m=$("#fMonth").value, p=$("#fPlant").value, q=norm($("#fSearch").value);
+  return ROWS.filter(r=>
+    (m==="ALL"||r.month===m) && (p==="ALL"||r.plant===p) &&
+    (!q || (`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q)));
+}
+
+/* ============================ RENDER ============================ */
+function render(){
+  const rows=current();
+  const totV=rows.reduce((s,r)=>s+(+r.value||0),0);
+  const totQ=rows.reduce((s,r)=>s+(+r.qty||0),0);
+  const nItems=new Set(rows.map(r=>r.item_code+"|"+r.plant)).size;
+  const nPlants=new Set(rows.map(r=>r.plant)).size;
+  $("#kpis").innerHTML=[
+    ["Total Inventory Value",rupee(totV)],["Total Stock Qty",inr(totQ)],
+    ["No. of Items",inr(nItems)],["Plants",inr(nPlants)]
+  ].map(k=>`<div class="kpi"><div class="k">${k[0]}</div><div class="v num">${k[1]}</div></div>`).join("");
+
+  const byP={}, byC={};
+  rows.forEach(r=>{byP[r.plant||"—"]=(byP[r.plant||"—"]||0)+(+r.value||0);
+                   byC[r.category||"—"]=(byC[r.category||"—"]||0)+(+r.value||0);});
+  bars("#cPlant", Object.entries(byP).sort((a,b)=>b[1]-a[1]).slice(0,14));
+  donut("#cCat", Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,8));
+
+  $("#tbody").innerHTML=rows.slice(0,500).map(r=>`<tr>
+    <td>${r.month||""}</td><td>${r.item_code||""}</td><td>${r.description||""}</td>
+    <td>${r.plant||""}</td><td>${r.category||""}</td>
+    <td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td>
+    <td>${r.last_movement||""}</td></tr>`).join("");
+  $("#cap").textContent=`Showing ${Math.min(rows.length,500)} of ${rows.length} rows in this view.`;
+}
+const PAL=["#2563c9","#e08a1e","#159f6e","#7a5af0","#1597a6","#d8443a","#9aa7bd","#c9792b",
+           "#3b82f6","#f6a823","#1fc17d","#9168f7","#2bb8c9","#ff6b7f"];
+function bars(id,data){
+  const host=$(id); host.innerHTML="";
+  if(!data.length){host.innerHTML='<div class="cap">No data.</div>';return;}
+  const W=Math.max(360,host.clientWidth||600),rot=data.length>6,B=rot?92:46,H=rot?320:260,L=46,R=12,Tp=22;
+  const mx=Math.max(1,...data.map(d=>d[1]/1e7));
+  let svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;svg+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#e3e9f3"/>`+
+    `<text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#8491a6">${(mx*(1-i/4)).toFixed(0)}</text>`;}
+  const slot=(W-L-R)/data.length,bw=Math.min(46,slot*0.5);
+  data.forEach((d,i)=>{const v=d[1]/1e7,h=(H-Tp-B)*(v/mx),cx=L+slot*i+slot/2,x=cx-bw/2,y=H-B-h;
+    svg+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="5" fill="${PAL[i%PAL.length]}"><title>${d[0]}: ${rupee(d[1])}</title></rect>`;
+    svg+=`<text x="${cx}" y="${y-6}" text-anchor="middle" font-size="12" font-weight="700" fill="#15233b">${v.toFixed(1)}</text>`;
+    const nm=(d[0].length>18?d[0].slice(0,17)+"…":d[0]), ny=H-B+(rot?14:20);
+    svg+=rot?`<text x="${cx}" y="${ny}" transform="rotate(-35 ${cx} ${ny})" text-anchor="end" font-size="11" fill="#55657f">${nm}</text>`
+            :`<text x="${cx}" y="${ny}" text-anchor="middle" font-size="12" fill="#55657f">${nm}</text>`;});
+  host.innerHTML=svg+"</svg>";
+}
+function donut(id,data){
+  const host=$(id); host.innerHTML="";
+  const tot=data.reduce((s,d)=>s+d[1],0)||1;
+  const W=Math.max(300,host.clientWidth||360),H=260,cx=W/2,cy=H/2,rO=Math.min(110,H/2-14),rI=rO*0.6;
+  let a=-Math.PI/2,svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`,lg="";
+  data.forEach((d,i)=>{const f=d[1]/tot,a2=a+f*2*Math.PI;
+    const x1=cx+rO*Math.cos(a),y1=cy+rO*Math.sin(a),x2=cx+rO*Math.cos(a2),y2=cy+rO*Math.sin(a2);
+    const xi2=cx+rI*Math.cos(a2),yi2=cy+rI*Math.sin(a2),xi1=cx+rI*Math.cos(a),yi1=cy+rI*Math.sin(a);
+    const laf=f>.5?1:0;
+    svg+=`<path d="M${x1} ${y1} A${rO} ${rO} 0 ${laf} 1 ${x2} ${y2} L${xi2} ${yi2} A${rI} ${rI} 0 ${laf} 0 ${xi1} ${yi1} Z" fill="${PAL[i%PAL.length]}"><title>${d[0]}: ${rupee(d[1])}</title></path>`;
+    lg+=`<span style="display:inline-flex;align-items:center;gap:5px;margin:3px 10px 0 0;font-size:11.5px;color:#55657f"><i style="width:10px;height:10px;border-radius:3px;background:${PAL[i%PAL.length]};display:inline-block"></i>${d[0]}</span>`;
+    a=a2;});
+  svg+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="18" font-weight="800" fill="#15233b">${rupee(tot)}</text>`;
+  svg+=`<text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="11" fill="#8491a6">total</text></svg>`;
+  host.innerHTML=svg+`<div style="margin-top:8px">${lg}</div>`;
+}
+["fMonth","fPlant"].forEach(id=>$("#"+id).addEventListener("change",render));
+$("#fSearch").addEventListener("input",render);
+$("#refreshBtn").onclick=loadData;
+
+/* ============================ IMPORT ============================ */
+$("#importBtn").onclick=()=>{$("#impMsg").textContent="";$("#file").value="";$("#replace").checked=false;$("#scrim").classList.add("on");};
+$("#impCancel").onclick=()=>$("#scrim").classList.remove("on");
+$("#impGo").onclick=async ()=>{
+  const f=$("#file").files[0], msg=$("#impMsg");
+  if(!f){msg.textContent="Please choose a file first.";return;}
+  msg.textContent="Reading file…";
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array",cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""}).filter(r=>r.some(c=>String(c).trim()!==""));
+    if(arr.length<2){msg.textContent="No rows found in the file.";return;}
+    const headers=arr[0].map(String);
+    const col={}; for(const k in ALIASES) col[k]=pickCol(headers,k);
+    if(!col.item_code){msg.textContent="Couldn't find an item-code column (Material / Item Code / Part No).";return;}
+    const idx={}; headers.forEach((h,i)=>idx[h]=i);
+    const get=(row,k)=> col[k]!=null ? row[idx[col[k]]] : "";
+    const rows=[];
+    for(let i=1;i<arr.length;i++){
+      const row=arr[i];
+      const code=String(get(row,"item_code")??"").trim();
+      if(!code || code.toLowerCase().startsWith("example")) continue;
+      const qty=n2(get(row,"qty")), uv=n2(get(row,"unit_value"));
+      let val=n2(get(row,"value")); if(!val && uv) val=qty*uv;
+      rows.push({month:toDate(get(row,"month")), item_code:code,
+        description:String(get(row,"description")??"").trim(),
+        plant:String(get(row,"plant")??"").trim()||null,
+        category:String(get(row,"category")??"").trim()||null,
+        qty:qty, unit_value:uv, value:val, last_movement:toDate(get(row,"last_movement"))});
+    }
+    if(!rows.length){msg.textContent="No usable rows found.";return;}
+    msg.textContent=`Found ${rows.length} rows. Saving…`;
+    if($("#replace").checked){
+      const del=await sb.from("inventory").delete().neq("id",-1);
+      if(del.error){msg.textContent="Could not clear old data: "+del.error.message;return;}
+    }
+    for(let i=0;i<rows.length;i+=500){
+      const {error}=await sb.from("inventory").insert(rows.slice(i,i+500));
+      if(error){msg.textContent="Save failed: "+error.message;return;}
+      msg.textContent=`Saving… ${Math.min(i+500,rows.length)}/${rows.length}`;
+    }
+    msg.textContent=`Imported ${rows.length} rows.`;
+    await loadData();
+    setTimeout(()=>$("#scrim").classList.remove("on"),700);
+  }catch(err){msg.textContent="Error reading file: "+err.message;}
+};
+
+/* ============================ EXPORT ============================ */
+$("#exportBtn").onclick=()=>{
+  const rows=current();
+  if(!rows.length){alert("Nothing to export in this view.");return;}
+  const cols=["month","item_code","description","plant","category","qty","unit_value","value","last_movement"];
+  const esc=c=>{c=(c==null?"":String(c)); return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;};
+  const csv=[cols.join(",")].concat(rows.map(r=>cols.map(c=>esc(r[c])).join(","))).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="inventory_export.csv";document.body.appendChild(a);a.click();a.remove();
+};
+
+/* ============================ START ============================ */
+sb.auth.onAuthStateChange(()=>refreshAuthUI());
+refreshAuthUI();
+</script>
+</body>
+</html>
