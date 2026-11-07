@@ -4,163 +4,154 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>InventoryIQ</title>
-<!-- libraries: Supabase (database + login) and SheetJS (read Excel/CSV) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
-  --bg:#eef2f8;--card:#fff;--ink:#15233b;--ink2:#55657f;--ink3:#8491a6;--line:#dde3ee;
+  --bg:#eef2f8;--card:#fff;--ink:#15233b;--ink2:#55657f;--ink3:#8491a6;--line:#dde3ee;--grid:#e3e9f3;--soft:#f7f9fd;
   --blue:#2f6bf0;--navy:#12306e;--green:#15a86f;--amber:#ea8c17;--red:#e2483e;--purple:#7c54f2;
   --side:#121a2e;--side2:#0d1424;--sideink:#aab6cc;--sideact:#2f6bf0;
   --shadow:0 1px 2px rgba(20,40,80,.06),0 6px 18px rgba(20,40,80,.08);
   --f:"Segoe UI",system-ui,Arial,sans-serif}
+:root[data-theme="dark"]{
+  --bg:#0c1322;--card:#141d33;--ink:#e8eefb;--ink2:#a7b6d2;--ink3:#7e8ea8;--line:#25304a;--grid:#25304a;--soft:#1a2438;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.35)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:13px}
 .num{font-variant-numeric:tabular-nums}
 button{font:inherit;cursor:pointer}
-/* ---- login ---- */
-#login{min-height:100vh;display:grid;place-items:center;padding:20px;
-  background:linear-gradient(120deg,#12306e,#2f6bf0)}
-.lcard{background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:32px 28px;width:360px;max-width:92vw}
+/* login */
+#login{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(120deg,#12306e,#2f6bf0)}
+.lcard{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:32px 28px;width:360px;max-width:92vw;color:#15233b}
 .lbrand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-.lbrand .logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff;font-weight:900;font-size:17px}
-.lbrand .t1{font-size:19px;font-weight:900;color:var(--navy)}
-.lbrand .t1 span{color:var(--blue)}
-.lbrand .t2{font-size:11px;color:var(--ink3)}
-.lcard p{color:var(--ink2);margin:0 0 18px;font-size:12.5px}
-.lcard label{display:block;font-size:11px;font-weight:700;color:var(--ink2);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
-.lcard input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit}
-.lcard button{width:100%;margin-top:18px;background:var(--blue);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:700}
-.msg{margin-top:12px;font-size:12px;min-height:16px}
-.msg.err{color:var(--red)} .msg.ok{color:var(--green)}
-/* ---- app shell ---- */
+.lbrand .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff}
+.lbrand .logo svg{width:24px;height:24px}
+.lbrand .t1{font-size:19px;font-weight:900;color:#12306e}.lbrand .t1 span{color:#2f6bf0}
+.lbrand .t2{font-size:11px;color:#8491a6}
+.lcard p{color:#55657f;margin:0 0 18px;font-size:12.5px}
+.lcard label{display:block;font-size:11px;font-weight:700;color:#55657f;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.lcard input{width:100%;padding:10px 12px;border:1px solid #dde3ee;border-radius:9px;font:inherit}
+.lcard button{width:100%;margin-top:18px;background:#2f6bf0;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:700}
+.msg{margin-top:12px;font-size:12px;min-height:16px}.msg.err{color:#e2483e}.msg.ok{color:#15a86f}
+/* shell */
 #app{display:none;min-height:100vh;grid-template-columns:224px 1fr}
 #app.on{display:grid}
-/* sidebar */
-.side{background:linear-gradient(180deg,var(--side),var(--side2));color:var(--sideink);
-  display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;align-self:start}
+.side{background:linear-gradient(180deg,var(--side),var(--side2));color:var(--sideink);display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;align-self:start}
 .brand{display:flex;align-items:center;gap:10px;padding:18px 16px 14px}
-.brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff;font-weight:900;font-size:16px;box-shadow:0 6px 16px rgba(47,107,240,.4)}
-.brand .t1{font-size:17px;font-weight:900;color:#fff;line-height:1}
-.brand .t1 span{color:#6ea2ff}
+.brand .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff;box-shadow:0 6px 16px rgba(47,107,240,.4)}
+.brand .logo svg{width:23px;height:23px}
+.brand .t1{font-size:17px;font-weight:900;color:#fff;line-height:1}.brand .t1 span{color:#6ea2ff}
 .brand .t2{font-size:10.5px;color:#7f8ca6;margin-top:3px}
 .nav{padding:8px;display:flex;flex-direction:column;gap:2px;flex:1}
-.nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:var(--sideink);
-  text-decoration:none;font-size:13px;font-weight:600;border-left:3px solid transparent;transition:.12s}
+.nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:var(--sideink);text-decoration:none;font-size:13px;font-weight:600;border-left:3px solid transparent;transition:.12s}
 .nav a svg{width:18px;height:18px;flex:none;opacity:.85}
 .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
 .nav a.on{background:rgba(47,107,240,.18);color:#fff;border-left-color:var(--sideact)}
 .nav a.on svg{opacity:1}
 .sidefoot{padding:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:7px}
 .sidefoot .who{font-size:11px;color:#8695b0;padding:0 2px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sbtn{display:flex;align-items:center;gap:8px;justify-content:center;background:rgba(255,255,255,.08);color:#dfe6f2;
-  border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:9px 10px;font-weight:700;font-size:12px}
-.sbtn.green{background:#15a86f;border-color:#15a86f;color:#fff}
-.sbtn:hover{filter:brightness(1.08)}
-/* main */
+.sbtn{display:flex;align-items:center;gap:8px;justify-content:center;background:rgba(255,255,255,.08);color:#dfe6f2;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:9px 10px;font-weight:700;font-size:12px}
+.sbtn.green{background:#15a86f;border-color:#15a86f;color:#fff}.sbtn:hover{filter:brightness(1.08)}
 .main{min-width:0;display:flex;flex-direction:column}
-.hero{background:linear-gradient(100deg,var(--navy),var(--blue));color:#fff;padding:18px 22px;
-  display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.hero{background:linear-gradient(100deg,var(--navy),var(--blue));color:#fff;padding:18px 22px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .hero .ht{flex:1;min-width:200px}
 .hero h2{margin:0;font-size:23px;font-weight:800}
 .hero .hs{font-size:12.5px;color:#cfe0f7;margin-top:3px}
 .hero .fl{display:flex;flex-direction:column;gap:4px}
 .hero .fl label{font-size:10px;font-weight:700;color:#bcd2f5;text-transform:uppercase;letter-spacing:.04em}
-.hero .fl select,.hero .fl input{padding:8px 10px;border:1px solid rgba(255,255,255,.3);border-radius:9px;font:inherit;
-  background:rgba(255,255,255,.14);color:#fff;min-width:150px}
-.hero .fl select option{color:#15233b}
-.hero .fl input::placeholder{color:#d7e3fa}
+.hero .fl select{padding:9px 10px;border:1px solid rgba(255,255,255,.3);border-radius:9px;font:inherit;background:#fff;color:#15233b;min-width:155px}
+.theme{width:40px;height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;align-self:flex-end}
+.theme svg{width:20px;height:20px}
 .content{padding:18px 22px;flex:1}
-/* kpi gradient cards */
 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px}
-.kpi{border-radius:15px;padding:16px;color:#fff;box-shadow:var(--shadow);position:relative;overflow:hidden;min-height:116px}
+.kpi{border-radius:15px;padding:16px;color:#fff;box-shadow:var(--shadow);min-height:118px}
 .kpi .ic{width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.22);display:grid;place-items:center;margin-bottom:10px}
 .kpi .ic svg{width:21px;height:21px}
 .kpi .k{font-size:12px;font-weight:700;opacity:.95}
 .kpi .v{font-size:25px;font-weight:900;margin-top:4px;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi .d{font-size:11px;opacity:.92;margin-top:5px}
-.k-blue{background:linear-gradient(135deg,#3b82f6,#2563c9)}
-.k-green{background:linear-gradient(135deg,#19b37d,#12905f)}
-.k-amber{background:linear-gradient(135deg,#f3ab33,#e08310)}
-.k-red{background:linear-gradient(135deg,#f0635a,#d83a30)}
+.k-blue{background:linear-gradient(135deg,#3b82f6,#2563c9)}.k-green{background:linear-gradient(135deg,#19b37d,#12905f)}
+.k-amber{background:linear-gradient(135deg,#f3ab33,#e08310)}.k-red{background:linear-gradient(135deg,#f0635a,#d83a30)}
 .k-purple{background:linear-gradient(135deg,#9168f7,#7a4ff0)}
-/* action centre */
+/* light KPI (colored top border) */
+.kpis.light .kpi{background:var(--card);color:var(--ink);border-top:4px solid var(--blue);min-height:104px}
+.kpis.light .kpi .k{color:var(--ink2)}.kpis.light .kpi .v{color:var(--ink)}.kpis.light .kpi .d{color:var(--ink3);opacity:1}
+.kpis.light .kpi.b-green{border-top-color:var(--green)}.kpis.light .kpi.b-amber{border-top-color:var(--amber)}
+.kpis.light .kpi.b-red{border-top-color:var(--red)}.kpis.light .kpi.b-purple{border-top-color:var(--purple)}
 .sechd{font-size:11.5px;font-weight:800;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin:4px 0 10px}
 .acts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-.act{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;
-  box-shadow:var(--shadow);padding:13px 14px;cursor:pointer;transition:.12s}
+.act{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;box-shadow:var(--shadow);padding:13px 14px;cursor:pointer;transition:.12s}
 .act:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(20,40,80,.14)}
-.act.red{border-left-color:var(--red)} .act.amber{border-left-color:var(--amber)}
-.act.purple{border-left-color:var(--purple)} .act.grey{border-left-color:#c3cdde;cursor:default;opacity:.7}
+.act.red{border-left-color:var(--red)}.act.amber{border-left-color:var(--amber)}.act.purple{border-left-color:var(--purple)}.act.grey{border-left-color:#c3cdde;opacity:.72;cursor:default}
 .act .big{font-size:23px;font-weight:900;color:var(--ink)}
 .act .lb{font-size:12px;font-weight:700;margin-top:2px}
 .act .nt{font-size:11px;color:var(--ink3);margin-top:3px}
-/* cards & charts */
 .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
-.grid.one{grid-template-columns:1fr}
+.grid.eq{grid-template-columns:1fr 1fr}.grid.one{grid-template-columns:1fr}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px;margin-bottom:16px}
 .card h3{margin:0 0 2px;font-size:14px}
 .card .sub{font-size:11px;color:var(--ink3);margin-bottom:10px}
+.chdr{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.tabs{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs button{border:none;background:transparent;padding:7px 13px;font-weight:700;font-size:12px;color:var(--ink2)}
+.tabs button.on{background:var(--blue);color:#fff}
 svg.chart{width:100%;height:auto;display:block;overflow:visible}
 .twrap{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:58vh}
 table{border-collapse:collapse;width:100%;font-size:12px}
 thead th{position:sticky;top:0;background:var(--navy);color:#fff;text-align:left;padding:8px 10px;font-size:11px;white-space:nowrap}
-tbody td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-tbody tr:nth-child(even){background:#f7f9fd}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;color:var(--ink)}
+tbody tr:nth-child(even){background:var(--soft)}
 td.r{text-align:right}
 .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700}
 .pA{background:#e5f3ec;color:#12905f}.pB{background:#fdf0db;color:#b9700a}.pC{background:#fbe6e4;color:#c0362c}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink2)}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.matrix{display:grid;grid-template-columns:40px 1fr 1fr 1fr;gap:8px;align-items:center}
+.matrix .hd{text-align:center;font-weight:800;color:var(--ink2);font-size:13px}
+.matrix .rh{font-weight:800;color:var(--ink2);text-align:center}
+.cell{border-radius:10px;padding:16px 8px;text-align:center;font-size:20px;font-weight:900;color:#fff}
+.inp{padding:8px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;background:var(--card);color:var(--ink)}
 .cap{font-size:11px;color:var(--ink3);margin-top:8px}
-.empty{padding:40px 16px;text-align:center;color:var(--ink3)}
-.empty .em{font-size:40px;margin-bottom:8px}
+.empty{padding:34px 16px;text-align:center;color:var(--ink3)}
+.empty .em{font-size:38px;margin-bottom:8px}
 .empty h4{margin:0 0 6px;color:var(--ink2);font-size:15px}
-.note{background:#f0f5ff;border:1px solid #d6e4ff;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#2c4a86;margin-top:10px}
-/* import dialog */
+.note{background:rgba(47,107,240,.08);border:1px solid rgba(47,107,240,.25);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--ink2);margin-top:10px}
 .scrim{position:fixed;inset:0;background:rgba(10,20,40,.45);display:none;place-items:center;z-index:50;padding:16px}
 .scrim.on{display:grid}
-.dlg{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px;width:460px;max-width:94vw}
-.dlg h3{margin:0 0 10px;color:var(--navy)}
+.dlg{background:var(--card);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px;width:460px;max-width:94vw;color:var(--ink)}
+.dlg h3{margin:0 0 10px;color:var(--blue)}
 .dlg p{font-size:12.5px;color:var(--ink2)}
 .dlg .row{display:flex;gap:10px;align-items:center;margin:12px 0}
 .dlg .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
-.dlg .actions button{border-radius:9px;padding:9px 14px;font-weight:700;border:1px solid var(--line);background:#fff}
+.dlg .actions button{border-radius:9px;padding:9px 14px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--ink)}
 .dlg .actions .go{background:var(--blue);color:#fff;border:none}
-@media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.acts{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
-@media(max-width:720px){
-  #app.on{grid-template-columns:1fr}
-  .side{position:static;min-height:0}
-  .nav{flex-direction:row;overflow-x:auto;flex-wrap:nowrap}
-  .nav a{white-space:nowrap}
-  .kpis{grid-template-columns:1fr 1fr}
-}
+.exp{background:var(--green);color:#fff;border:none;border-radius:9px;padding:9px 13px;font-weight:700;display:inline-flex;gap:7px;align-items:center}
+@media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.acts{grid-template-columns:repeat(2,1fr)}.grid,.grid.eq{grid-template-columns:1fr}}
+@media(max-width:720px){#app.on{grid-template-columns:1fr}.side{position:static;min-height:0}.nav{flex-direction:row;overflow-x:auto}.nav a{white-space:nowrap}.kpis{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
 
-<!-- ================= LOGIN ================= -->
 <div id="login">
   <form class="lcard" id="loginForm">
     <div class="lbrand">
-      <div class="logo">IQ</div>
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><rect x="9" y="13" width="6" height="7"/></svg></div>
       <div><div class="t1">Inventory<span>IQ</span></div><div class="t2">AI inventory intelligence</div></div>
     </div>
     <p>Sign in to view and manage your inventory.</p>
-    <label>Email</label>
-    <input id="email" type="email" autocomplete="username" required>
-    <label>Password</label>
-    <input id="password" type="password" autocomplete="current-password" required>
+    <label>Email</label><input id="email" type="email" autocomplete="username" required>
+    <label>Password</label><input id="password" type="password" autocomplete="current-password" required>
     <button type="submit" id="loginBtn">Sign in</button>
     <div class="msg" id="loginMsg"></div>
   </form>
 </div>
 
-<!-- ================= APP ================= -->
 <div id="app">
-  <!-- sidebar -->
   <aside class="side">
     <div class="brand">
-      <div class="logo">IQ</div>
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><rect x="9" y="13" width="6" height="7"/></svg></div>
       <div><div class="t1">Inventory<span>IQ</span></div><div class="t2">AI inventory intelligence</div></div>
     </div>
     <nav class="nav" id="nav"></nav>
@@ -172,24 +163,18 @@ td.r{text-align:right}
       <button class="sbtn" id="logoutBtn">Sign out</button>
     </div>
   </aside>
-
-  <!-- main -->
   <div class="main">
     <header class="hero">
-      <div class="ht">
-        <h2 id="pgTitle">Overview</h2>
-        <div class="hs" id="pgSub">Stock position · movement · ageing · value</div>
-      </div>
+      <div class="ht"><h2 id="pgTitle">Overview</h2><div class="hs" id="pgSub">Stock position · movement · ageing · value</div></div>
       <div class="fl"><label>Plant</label><select id="fPlant"><option value="ALL">All plants</option></select></div>
-      <div class="fl"><label>Category</label><select id="fCat"><option value="ALL">All categories</option></select></div>
-      <div class="fl"><label>Month</label><select id="fMonth"><option value="ALL">All months</option></select></div>
-      <div class="fl"><label>Search</label><input id="fSearch" placeholder="material / code / category…"></div>
+      <div class="fl"><label>Material Category</label><select id="fCat"><option value="ALL">All categories</option></select></div>
+      <div class="fl"><label>As on month</label><select id="fMonth"><option value="ALL">Latest</option></select></div>
+      <button class="theme" id="themeBtn" title="Toggle light / dark"></button>
     </header>
     <div class="content" id="content"></div>
   </div>
 </div>
 
-<!-- import dialog -->
 <div class="scrim" id="scrim">
   <div class="dlg">
     <h3>Import inventory data</h3>
@@ -198,64 +183,54 @@ td.r{text-align:right}
     <div class="row"><input type="file" id="file" accept=".csv,.xlsx,.xls"></div>
     <div class="row"><label style="font-size:12.5px"><input type="checkbox" id="replace"> Replace ALL existing data first</label></div>
     <div class="msg" id="impMsg"></div>
-    <div class="actions">
-      <button id="impCancel">Cancel</button>
-      <button class="go" id="impGo">Import</button>
-    </div>
+    <div class="actions"><button id="impCancel">Cancel</button><button class="go" id="impGo">Import</button></div>
   </div>
 </div>
 
 <script>
-/* ============================================================================
-   Supabase project details (already filled in):
-   ============================================================================ */
 const SUPABASE_URL  = "https://otivfbrxclvwofbcymay.supabase.co";
 const SUPABASE_ANON = "sb_publishable_zlPF5ZdyS3CggHIFdc4eZQ_yVTrU7s9";
-/* The publishable/anon key is SAFE here — it is public, and your data is
-   protected by the login + Row Level Security you set up in schema.sql. */
-
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const $ = s => document.querySelector(s);
-let ROWS = [];                 // all inventory rows from the DB
-let VIEW = "overview";         // active page
+let ROWS=[], VIEW="overview", TREND_MODE="all", THEME="light";
+const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
+const DAY=86400000;
 
-/* thresholds (change here anytime) */
-const AGE_SLOW = 90;           // days with no movement = slow-moving
-const AGE_RISK = 180;          // days with no movement = at-risk / toward obsolete
+/* theme colours for charts */
+function tk(){ return THEME==="dark"
+  ? {grid:"#25304a",txt:"#9fb0cc",strong:"#e8eefb"}
+  : {grid:"#e3e9f3",txt:"#55657f",strong:"#15233b"}; }
 
-/* ---------- icons (inline svg) ---------- */
-const IC = {
+const IC={
   overview:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   value:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="13"/><line x1="22" y1="20" x2="2" y2="20"/></svg>',
   ageing:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   stock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><line x1="12" y1="11" x2="12" y2="21"/></svg>',
   trend:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,17 9,11 13,15 21,7"/><polyline points="15,7 21,7 21,13"/></svg>',
   abc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/></svg>',
-  stockout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>',
+  stockout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/></svg>',
   forecast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15a4 4 0 0 1 4-4 5 5 0 0 1 9.6-1.5A3.5 3.5 0 1 1 18 18H7a4 4 0 0 1-4-3z"/></svg>',
   details:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/></svg>',
   rupee:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4h12M6 9h12M16 4c0 5-4 6-8 6l7 10"/></svg>',
   box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>',
   warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/></svg>',
-  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>',
+  moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
 };
-
-/* ---------- menu ---------- */
-const MENU = [
+const MENU=[
   ["overview","Overview","Stock position · movement · ageing · value"],
-  ["value","Inventory Value","Where your money is tied up"],
-  ["ageing","Ageing & Slow-Moving","How long stock has sat idle"],
-  ["stock","Stock Position","On-hand by plant & item"],
-  ["trend","Inventory Trend","Stock value over time"],
-  ["abc","Movement & ABC","A/B/C classification by value"],
-  ["stockout","Stock-out Risk","Items at risk of running out"],
-  ["forecast","Demand Forecast","Projected demand & reorder"],
-  ["details","Inventory Details","Full line-item table"]
+  ["value","Inventory Value","Where your stock value sits"],
+  ["ageing","Ageing & Slow-Moving","Where your inventory money is stuck"],
+  ["stock","Stock Position","On-hand value, SKUs & 12-month trend"],
+  ["trend","Inventory Trend","Value & quantity over time"],
+  ["abc","Movement & ABC","What's turning, and what matters most"],
+  ["stockout","Stock-out Risk","Items that run dry before resupply"],
+  ["forecast","Demand Forecast","Predicted consumption & cover"],
+  ["details","Inventory Details","Full material list & export"]
 ];
-
-/* ---------- column recognition ---------- */
-const ALIASES = {
+const ALIASES={
   item_code:["material","item code","item_code","part no","part number","sku","code","item","item no","stock code"],
   description:["description","material description","item name","name","desc","item description"],
   plant:["plant name","plant","location","site","warehouse","store","godown","branch","depot","unit"],
@@ -266,415 +241,426 @@ const ALIASES = {
   month:["month","period","snapshot month","period end","as on","as of date","date"],
   last_movement:["last movement date","last movement","last issue date","last issue","last goods movement","last moved","last txn date"]
 };
-const norm = h => (h==null?"":String(h).trim().toLowerCase().replace(/\s+/g," "));
-function pickCol(headers, field){
-  const H = headers.map(norm);
-  for(const a of ALIASES[field]){const i=H.indexOf(a); if(i>=0) return headers[i];}
-  return null;
-}
-function toDate(v){
-  if(v==null||v==="") return null;
-  if(v instanceof Date) return v.toISOString().slice(0,10);
-  const s=String(v).trim();
-  let m=s.match(/(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?/);
-  if(m) return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]||"01").padStart(2,"0")}`;
+const norm=h=>(h==null?"":String(h).trim().toLowerCase().replace(/\s+/g," "));
+function pickCol(hs,f){const H=hs.map(norm);for(const a of ALIASES[f]){const i=H.indexOf(a);if(i>=0)return hs[i];}return null;}
+function toDate(v){if(v==null||v==="")return null;if(v instanceof Date)return v.toISOString().slice(0,10);
+  const s=String(v).trim();let m=s.match(/(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]||"01").padStart(2,"0")}`;
   m=s.match(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if(m) return `${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
-  const d=new Date(s); return isNaN(d)?null:d.toISOString().slice(0,10);
-}
-const n2 = v => { const x=parseFloat(String(v??"").replace(/,/g,"")); return isNaN(x)?0:x; };
+  if(m)return `${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
+  const d=new Date(s);return isNaN(d)?null:d.toISOString().slice(0,10);}
+const n2=v=>{const x=parseFloat(String(v??"").replace(/,/g,""));return isNaN(x)?0:x;};
+function rupee(n){const a=Math.abs(n);if(a>=1e7)return "₹"+(n/1e7).toFixed(2)+" Cr";if(a>=1e5)return "₹"+(n/1e5).toFixed(2)+" L";return "₹"+Math.round(n).toLocaleString("en-IN");}
+const inr=n=>Math.round(n).toLocaleString("en-IN");
+const MLAB=d=>{const[y,m]=d.split("-");return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(+m)-1]+"-"+y.slice(2);};
 
-/* ---------- formatting ---------- */
-function rupee(n){const a=Math.abs(n);
-  if(a>=1e7) return "₹"+(n/1e7).toFixed(2)+" Cr";
-  if(a>=1e5) return "₹"+(n/1e5).toFixed(2)+" L";
-  return "₹"+Math.round(n).toLocaleString("en-IN");}
-const inr = n => Math.round(n).toLocaleString("en-IN");
-const DAY = 86400000;
-
-/* ============================ AUTH ============================ */
+/* ===== AUTH (instant login: show app first, load data after) ===== */
 async function refreshAuthUI(){
-  const {data} = await sb.auth.getSession();
+  const {data}=await sb.auth.getSession();
   if(data.session){
-    $("#login").style.display="none";
-    $("#app").classList.add("on");
-    $("#who").textContent = data.session.user.email;
-    buildNav();
-    await loadData();
-  }else{
-    $("#login").style.display="grid";
-    $("#app").classList.remove("on");
-  }
+    $("#login").style.display="none"; $("#app").classList.add("on");
+    $("#who").textContent=data.session.user.email; buildNav(); applyTheme();
+    if(!ROWS.length){ $("#content").innerHTML='<div class="empty"><div class="em">⏳</div><h4>Loading your inventory…</h4></div>'; }
+    loadData();
+  }else{ $("#login").style.display="grid"; $("#app").classList.remove("on"); }
 }
-$("#loginForm").addEventListener("submit", async e=>{
-  e.preventDefault();
-  const msg=$("#loginMsg"); msg.className="msg"; msg.textContent="Signing in…";
-  const {error} = await sb.auth.signInWithPassword({email:$("#email").value.trim(), password:$("#password").value});
-  if(error){ msg.className="msg err"; msg.textContent=error.message; }
-  else { msg.className="msg ok"; msg.textContent="Welcome!"; await refreshAuthUI(); }
+$("#loginForm").addEventListener("submit",async e=>{
+  e.preventDefault();const msg=$("#loginMsg");msg.className="msg";msg.textContent="Signing in…";
+  const {error}=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#password").value});
+  if(error){msg.className="msg err";msg.textContent=error.message;}
+  else{msg.className="msg ok";msg.textContent="Welcome!";}
 });
-$("#logoutBtn").onclick = async ()=>{ await sb.auth.signOut(); await refreshAuthUI(); };
+$("#logoutBtn").onclick=async()=>{ROWS=[];await sb.auth.signOut();};
 
-/* ============================ NAV ============================ */
+/* ===== NAV ===== */
 function buildNav(){
-  $("#nav").innerHTML = MENU.map(m=>
-    `<a href="#" data-v="${m[0]}" class="${m[0]===VIEW?'on':''}">${IC[m[0]]}<span>${m[1]}</span></a>`).join("");
+  $("#nav").innerHTML=MENU.map(m=>`<a href="#" data-v="${m[0]}" class="${m[0]===VIEW?'on':''}">${IC[m[0]]}<span>${m[1]}</span></a>`).join("");
   $("#nav").querySelectorAll("a").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.v);});
 }
-function go(v){
-  VIEW=v;
-  $("#nav").querySelectorAll("a").forEach(a=>a.classList.toggle("on",a.dataset.v===v));
-  const m=MENU.find(x=>x[0]===v)||MENU[0];
-  $("#pgTitle").textContent=m[1]; $("#pgSub").textContent=m[2];
-  render();
-}
+function go(v){VIEW=v;$("#nav").querySelectorAll("a").forEach(a=>a.classList.toggle("on",a.dataset.v===v));
+  const m=MENU.find(x=>x[0]===v)||MENU[0];$("#pgTitle").textContent=m[1];$("#pgSub").textContent=m[2];render();}
+window.go=go;
 
-/* ============================ DATA ============================ */
+/* ===== THEME ===== */
+function applyTheme(){ document.documentElement.setAttribute("data-theme",THEME);
+  $("#themeBtn").innerHTML = THEME==="dark"?IC.sun:IC.moon; }
+$("#themeBtn").onclick=()=>{THEME=THEME==="dark"?"light":"dark";
+  try{localStorage.setItem("iq_theme",THEME);}catch(e){} applyTheme();render();};
+try{const t=localStorage.getItem("iq_theme");if(t)THEME=t;}catch(e){}
+
+/* ===== DATA ===== */
 async function loadData(){
-  const {data,error} = await sb.from("inventory").select("*").order("value",{ascending:false}).limit(8000);
-  if(error){ $("#content").innerHTML=`<div class="empty"><div class="em">⚠️</div><h4>Could not load data</h4><div>${error.message}</div></div>`; return; }
-  ROWS = data||[];
-  buildFilters(); render();
+  const {data,error}=await sb.from("inventory").select("*").order("value",{ascending:false}).limit(12000);
+  if(error){$("#content").innerHTML=`<div class="empty"><div class="em">⚠️</div><h4>Could not load data</h4><div>${error.message}</div></div>`;return;}
+  ROWS=data||[];buildFilters();render();
 }
 function buildFilters(){
   const months=[...new Set(ROWS.map(r=>r.month).filter(Boolean))].sort().reverse();
   const plants=[...new Set(ROWS.map(r=>r.plant).filter(Boolean))].sort();
   const cats=[...new Set(ROWS.map(r=>r.category).filter(Boolean))].sort();
   const fm=$("#fMonth"),fp=$("#fPlant"),fc=$("#fCat"),mv=fm.value,pv=fp.value,cv=fc.value;
-  fm.innerHTML='<option value="ALL">All months</option>'+months.map(m=>`<option>${m}</option>`).join("");
+  fm.innerHTML='<option value="ALL">Latest</option>'+months.map(m=>`<option value="${m}">${MLAB(m)}</option>`).join("");
   fp.innerHTML='<option value="ALL">All plants</option>'+plants.map(p=>`<option>${p}</option>`).join("");
   fc.innerHTML='<option value="ALL">All categories</option>'+cats.map(c=>`<option>${c}</option>`).join("");
-  fm.value = months.includes(mv)?mv:"ALL";
-  fp.value = plants.includes(pv)?pv:"ALL";
-  fc.value = cats.includes(cv)?cv:"ALL";
+  fm.value=[...fm.options].some(o=>o.value===mv)?mv:"ALL";
+  fp.value=plants.includes(pv)?pv:"ALL"; fc.value=cats.includes(cv)?cv:"ALL";
 }
-/* rows after Plant+Category+Search (NOT month — month handled per view) */
-function base(){
-  const p=$("#fPlant").value,c=$("#fCat").value,q=norm($("#fSearch").value);
-  return ROWS.filter(r=>
-    (p==="ALL"||r.plant===p) && (c==="ALL"||r.category===c) &&
-    (!q || (`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q)));
-}
-/* rows for the currently selected month (latest if ALL) within base() */
-function current(){
-  const rows=base();
-  const m=$("#fMonth").value;
-  if(m!=="ALL") return rows.filter(r=>r.month===m);
-  const months=[...new Set(rows.map(r=>r.month).filter(Boolean))].sort();
-  if(!months.length) return rows;                 // data has no month column
-  const latest=months[months.length-1];
-  return rows.filter(r=>r.month===latest);
-}
-function asOfDate(rows){
-  let mx=0; rows.forEach(r=>{if(r.last_movement){const t=Date.parse(r.last_movement); if(t>mx)mx=t;}});
-  return mx||Date.now();
-}
-function ageDays(r,asOf){ if(!r.last_movement)return null; return Math.floor((asOf-Date.parse(r.last_movement))/DAY); }
+function base(){const p=$("#fPlant").value,c=$("#fCat").value;
+  return ROWS.filter(r=>(p==="ALL"||r.plant===p)&&(c==="ALL"||r.category===c));}
+function months(rows){return [...new Set(rows.map(r=>r.month).filter(Boolean))].sort();}
+function current(){const rows=base(),m=$("#fMonth").value;
+  if(m!=="ALL")return rows.filter(r=>r.month===m);
+  const ms=months(rows);if(!ms.length)return rows;const latest=ms[ms.length-1];return rows.filter(r=>r.month===latest);}
+function asOfDate(rows){let mx=0;rows.forEach(r=>{if(r.last_movement){const t=Date.parse(r.last_movement);if(t>mx)mx=t;}});
+  const m=$("#fMonth").value; if(m!=="ALL"){const t=Date.parse(m+"T00:00:00");if(t>mx)mx=t;} return mx||Date.now();}
+function ageDays(r,asOf){if(!r.last_movement)return null;return Math.floor((asOf-Date.parse(r.last_movement))/DAY);}
+function agg(rows,key){const o={};rows.forEach(r=>{const k=r[key]||"—";o[k]=(o[k]||0)+(+r.value||0);});return Object.entries(o).sort((a,b)=>b[1]-a[1]);}
+function momValue(){const bm={};base().forEach(r=>{if(r.month)bm[r.month]=(bm[r.month]||0)+(+r.value||0);});
+  const ms=Object.keys(bm).sort();if(ms.length<2)return null;const a=bm[ms[ms.length-1]],b=bm[ms[ms.length-2]];return b?(a-b)/b*100:null;}
 
-/* ============================ RENDER DISPATCH ============================ */
+/* ===== RENDER ===== */
 function render(){
-  if(!ROWS.length){
-    $("#content").innerHTML=`<div class="empty"><div class="em">📦</div><h4>No data yet</h4>
-      <div>Click <b>Import data</b> in the left menu and upload a stock file (.xlsx / .csv).</div></div>`;
-    return;
-  }
-  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,
-    abc:vABC,stockout:vStockout,forecast:vForecast,details:vDetails}[VIEW]||vOverview)();
+  if(!ROWS.length){$("#content").innerHTML=`<div class="empty"><div class="em">📦</div><h4>No data yet</h4><div>Click <b>Import data</b> and upload a stock file (.xlsx / .csv).</div></div>`;return;}
+  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,abc:vABC,stockout:vStockout,forecast:vForecast,details:vDetails}[VIEW]||vOverview)();
 }
 
-/* ---------- OVERVIEW ---------- */
+/* -- Overview -- */
 function vOverview(){
-  const rows=current(), asOf=asOfDate(rows), hasMove=rows.some(r=>r.last_movement);
-  const totV=rows.reduce((s,r)=>s+(+r.value||0),0);
-  const totQ=rows.reduce((s,r)=>s+(+r.qty||0),0);
+  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>r.last_movement);
+  const totV=rows.reduce((s,r)=>s+(+r.value||0),0),totQ=rows.reduce((s,r)=>s+(+r.qty||0),0);
   const nItems=new Set(rows.map(r=>r.item_code+"|"+r.plant)).size;
-
-  // slow / at-risk via ageing
-  let slowN=0,slowV=0,riskV=0,aged90V=0;
-  rows.forEach(r=>{const d=ageDays(r,asOf); if(d==null)return;
-    if(d>=AGE_SLOW){slowN++;slowV+=(+r.value||0);}
-    if(d>=AGE_SLOW)aged90V+=(+r.value||0);
-    if(d>=AGE_RISK)riskV+=(+r.value||0);});
-
-  // MoM on value (base across all months for selected plant/cat)
-  const bm={}; base().forEach(r=>{if(r.month)bm[r.month]=(bm[r.month]||0)+(+r.value||0);});
-  const ms=Object.keys(bm).sort(); let mom=null;
-  if(ms.length>=2){const a=bm[ms[ms.length-1]],b=bm[ms[ms.length-2]]; if(b)mom=(a-b)/b*100;}
-  const momTxt = mom==null?"· across all plants":`${mom>=0?"▲":"▼"} ${Math.abs(mom).toFixed(1)}% vs last month`;
-
-  const kpi=(cls,icon,k,v,d)=>`<div class="kpi ${cls}"><div class="ic">${icon}</div>
-    <div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
+  let slowN=0,slowV=0,riskV=0,deadV=0,aged90N=0;
+  rows.forEach(r=>{const d=ageDays(r,asOf);if(d==null)return;
+    if(d>=AGE_SLOW){slowN++;slowV+=(+r.value||0);aged90N++;}
+    if(d>=AGE_RISK)riskV+=(+r.value||0);if(d>=AGE_DEAD)deadV+=(+r.value||0);});
+  const mom=momValue(),momTxt=mom==null?"across all plants":`${mom>=0?"▲":"▼"} ${Math.abs(mom).toFixed(1)}% vs last month`;
+  const kpi=(c,i,k,v,d)=>`<div class="kpi ${c}"><div class="ic">${i}</div><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
   const kpis=`<div class="kpis">
     ${kpi("k-blue",IC.rupee,"Total Inventory Value",rupee(totV),momTxt)}
     ${kpi("k-green",IC.box,"Total Stock Quantity",inr(totQ),"units on hand")}
     ${kpi("k-amber",IC.list,"No. of Materials",inr(nItems),"distinct item-plant lines")}
-    ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d`:"needs last-movement date")}
-    ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · > ${AGE_SLOW}d`:"needs last-movement date")}
-  </div>`;
-
-  // action centre
-  const zeroN=rows.filter(r=>(+r.qty||0)<=0).length;
-  const noDateN=rows.filter(r=>!r.last_movement).length;
-  const acts=`<div class="sechd">Action Centre — tap a card to dig in</div><div class="acts">
-    <div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(aged90V):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>
+    ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d · tap`:"needs last-movement date")}
+    ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · tap`:"needs last-movement date")}</div>`;
+  const zeroN=rows.filter(r=>(+r.qty||0)<=0).length,noDateN=rows.filter(r=>!r.last_movement).length;
+  const acts=`<div class="sechd">Action Centre — tap a card for the line items</div><div class="acts">
+    <div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(slowV):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>
     <div class="act red" onclick="go('ageing')"><div class="big num">${hasMove?rupee(riskV):"—"}</div><div class="lb">Toward obsolete</div><div class="nt">no movement > ${AGE_RISK} days</div></div>
-    <div class="act purple" onclick="go('abc')"><div class="big num">${inr(nItems)}</div><div class="lb">Items to classify</div><div class="nt">A / B / C by value</div></div>
-    <div class="act grey"><div class="big num">${inr(zeroN)}</div><div class="lb">Zero / negative qty</div><div class="nt">${noDateN?inr(noDateN)+" missing movement date":"review in Details"}</div></div>
-  </div>`;
-
-  const byP=agg(rows,"plant"), byC=agg(rows,"category");
+    <div class="act purple" onclick="go('ageing')"><div class="big num">${hasMove?rupee(deadV):"—"}</div><div class="lb">Dead stock</div><div class="nt">no movement > ${AGE_DEAD} days</div></div>
+    <div class="act ${zeroN?'':'grey'}" onclick="go('details')"><div class="big num">${inr(zeroN)}</div><div class="lb">Zero / negative qty</div><div class="nt">${noDateN?inr(noDateN)+" missing movement date":"review in Details"}</div></div></div>`;
   const charts=`<div class="grid">
     <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
-    <div class="card"><h3>Value by Category</h3><div class="sub">share of total stock value</div><div id="cCat"></div></div>
-  </div>`;
-
+    <div class="card"><h3>Inventory Value by Category</h3><div class="sub">share of total stock value</div><div id="cCat"></div></div></div>`;
   $("#content").innerHTML=kpis+acts+charts;
-  bars("#cPlant",byP.slice(0,12)); donut("#cCat",byC.slice(0,8));
+  bars("#cPlant",agg(rows,"plant").slice(0,12)); donut("#cCat",agg(rows,"category").slice(0,9),true);
 }
 
-/* ---------- INVENTORY VALUE ---------- */
+/* -- Inventory Value -- */
 function vValue(){
   const rows=current();
-  const byP=agg(rows,"plant"), byC=agg(rows,"category");
   const top=[...rows].sort((a,b)=>(+b.value||0)-(+a.value||0)).slice(0,20);
   $("#content").innerHTML=`
     <div class="grid">
-      <div class="card"><h3>Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
-      <div class="card"><h3>Value by Category</h3><div class="sub">share of total</div><div id="cCat"></div></div>
-    </div>
-    <div class="card"><h3>Top 20 items by value</h3><div class="sub">where the money is tied up</div>
+      <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
+      <div class="card"><h3>Inventory Value by Category</h3><div class="sub">share of total stock value</div><div id="cCat"></div></div></div>
+    <div class="card"><h3>Top 20 Materials by Value</h3><div class="sub">largest single holdings</div>
       <div class="twrap"><table><thead><tr><th>Item Code</th><th>Description</th><th>Plant</th><th>Category</th><th class="r">Qty</th><th class="r">Value (₹)</th></tr></thead>
-      <tbody>${top.map(r=>`<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td>${r.category||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td></tr>`).join("")}</tbody></table></div>
-    </div>`;
-  bars("#cPlant",byP.slice(0,12)); donut("#cCat",byC.slice(0,8));
+      <tbody>${top.map(r=>`<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td>${r.category||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td></tr>`).join("")}</tbody></table></div></div>`;
+  bars("#cPlant",agg(rows,"plant").slice(0,12)); donut("#cCat",agg(rows,"category").slice(0,10),true);
 }
 
-/* ---------- AGEING ---------- */
+/* -- Ageing -- */
 function vAgeing(){
-  const rows=current(), asOf=asOfDate(rows), hasMove=rows.some(r=>r.last_movement);
-  if(!hasMove){ $("#content").innerHTML=needsCol("last-movement date",
-     "Your stock file has no Last Movement column, so ageing can't be calculated. Add a <b>Last Movement Date</b> column to each item and re-import — this page then fills in automatically."); return; }
-  const B=[["0–45 days",0,45,"#15a86f"],["45–90 days",45,90,"#8bc34a"],["90–180 days",90,180,"#ea8c17"],["180–365 days",180,365,"#f0635a"],["365+ days",365,1e9,"#c0362c"],["No movement date",-1,-1,"#9aa7bd"]];
+  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>r.last_movement);
+  if(!hasMove){$("#content").innerHTML=needs("last-movement date","Your stock file has no <b>Last Movement</b> column, so ageing can't be calculated. Add a Last Movement Date to each item and re-import — this page fills in automatically.");return;}
+  let riskV=0,slowV=0,slowN=0,deadV=0,deadN=0,aged90N=0;
+  rows.forEach(r=>{const d=ageDays(r,asOf);if(d==null)return;
+    if(d>=AGE_SLOW){slowV+=(+r.value||0);slowN++;aged90N++;}
+    if(d>=AGE_RISK)riskV+=(+r.value||0);
+    if(d>=AGE_DEAD){deadV+=(+r.value||0);deadN++;}});
+  const B=[["0–45 days",0,45,"#15a86f"],["45–90 days",45,90,"#8bc34a"],["90–180 days",90,180,"#ea8c17"],["180–365 days",180,365,"#f0635a"],["365+ days",365,1e9,"#c0362c"],["No date",-1,-1,"#9aa7bd"]];
   const buck=B.map(b=>({lb:b[0],col:b[3],v:0,n:0}));
-  rows.forEach(r=>{const d=ageDays(r,asOf); let i;
-    if(d==null)i=5; else i=B.findIndex(b=>b[1]>=0&&d>=b[1]&&d<b[2]);
-    if(i<0)i=4; buck[i].v+=(+r.value||0); buck[i].n++;});
-  const ras=new Date(asOf).toISOString().slice(0,10);
+  rows.forEach(r=>{const d=ageDays(r,asOf);let i;if(d==null)i=5;else i=B.findIndex(b=>b[1]>=0&&d>=b[1]&&d<b[2]);if(i<0)i=4;buck[i].v+=(+r.value||0);buck[i].n++;});
+  const mv=[["Healthy / moving",0,45,"#2563c9"],["Slow-moving",45,180,"#e08a1e"],["Non-moving",180,365,"#159f6e"],["Dead / obsolete-risk",365,1e9,"#7c54f2"]];
+  const mvv=mv.map(x=>{let v=0;rows.forEach(r=>{const d=ageDays(r,asOf);if(d!=null&&d>=x[1]&&d<x[2])v+=(+r.value||0);});return [x[0],v];});
+  const healthyV=rows.reduce((s,r)=>{const d=ageDays(r,asOf);return s+((d!=null&&d<AGE_SLOW)?(+r.value||0):0);},0);
+  const lk=(c,k,v,d)=>`<div class="kpi ${c}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
   $("#content").innerHTML=`
-    <div class="card one"><h3>Stock value by age band</h3><div class="sub">days since last movement · as on ${ras}</div><div id="cAge"></div></div>
+    <div class="kpis light">
+      ${lk("b-red","Value at risk",rupee(riskV),"no movement > "+AGE_RISK+"d")}
+      ${lk("b-purple","Slow / Non-moving",rupee(slowV),inr(slowN)+" items · > "+AGE_SLOW+"d")}
+      ${lk("b-red","Dead stock (365d+)",rupee(deadV),inr(deadN)+" items")}
+      ${lk("b-amber","&gt; 90-day aged",inr(aged90N)+" items","toward obsolete")}
+      ${lk("b-green","Healthy stock value",rupee(healthyV),"actively turning")}
+    </div>
+    <div class="grid">
+      <div class="card"><h3>Stock Ageing (Value)</h3><div class="sub">₹ by days without movement</div><div id="cAge"></div></div>
+      <div class="card"><h3>Inventory Value by Movement</h3><div class="sub">how much is actually turning</div><div id="cMove"></div></div></div>
     <div class="card"><h3>Ageing breakdown</h3><div class="sub">value & item count per band</div>
       <div class="twrap"><table><thead><tr><th>Age band</th><th class="r">Items</th><th class="r">Value (₹)</th><th class="r">% of value</th></tr></thead>
       <tbody>${(()=>{const T=buck.reduce((s,b)=>s+b.v,0)||1;return buck.map(b=>`<tr><td>${b.lb}</td><td class="r num">${inr(b.n)}</td><td class="r num">${inr(b.v)}</td><td class="r num">${(b.v/T*100).toFixed(1)}%</td></tr>`).join("");})()}</tbody></table></div>
-      <div class="note">Items with no movement for more than <b>${AGE_RISK} days</b> are strong candidates for review — redeploy, liquidate, or stop re-ordering.</div>
-    </div>`;
-  barsColored("#cAge",buck.map(b=>[b.lb,b.v,b.col]));
+      <div class="note">Items idle more than <b>${AGE_RISK} days</b> are strong candidates to redeploy, liquidate, or stop re-ordering.</div></div>`;
+  barsC("#cAge",buck.map(b=>[b.lb,b.v,b.col])); donutD("#cMove",mvv,mv.map(x=>x[3]));
 }
 
-/* ---------- STOCK POSITION ---------- */
+/* -- Stock Position -- */
 function vStock(){
   const rows=current();
-  const byP={}; rows.forEach(r=>{const p=r.plant||"—";(byP[p]=byP[p]||{q:0,v:0,n:0});byP[p].q+=(+r.qty||0);byP[p].v+=(+r.value||0);byP[p].n++;});
-  const list=Object.entries(byP).sort((a,b)=>b[1].v-a[1].v);
+  const totV=rows.reduce((s,r)=>s+(+r.value||0),0);
+  const skus=new Set(rows.map(r=>r.item_code+"|"+r.plant)).size;
+  const mom=momValue();
+  const lk=(c,k,v,d)=>`<div class="kpi ${c}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
+  // stacked 12-month by category
+  const ms=months(base());
   $("#content").innerHTML=`
+    <div class="kpis light">
+      ${lk("",'Stock Value (on hand)',rupee(totV),mom==null?"this period":`${mom>=0?"▲":"▼"} ${Math.abs(mom).toFixed(1)}% vs last month`)}
+      ${lk("b-green",'Active SKUs',inr(skus),"item-plant lines")}
+      ${lk("b-red",'Stock-out Risk',"—","needs consumption data")}
+      ${lk("b-amber",'Inventory Turns',"—","needs consumption data")}
+      ${lk("b-purple",'On Order (open PO)',"—","needs PO data")}
+    </div>
+    <div class="card"><h3>Stock Value by Category — by month</h3><div class="sub">₹ Cr stacked over time</div><div id="cStack"></div></div>
     <div class="card"><h3>On-hand by plant</h3><div class="sub">quantity & value per location</div>
       <div class="twrap"><table><thead><tr><th>Plant</th><th class="r">Item lines</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th></tr></thead>
-      <tbody>${list.map(([p,o])=>`<tr><td>${p}</td><td class="r num">${inr(o.n)}</td><td class="r num">${inr(o.q)}</td><td class="r num">${inr(o.v)}</td></tr>`).join("")}</tbody></table></div>
-    </div>
-    <div class="card one"><h3>Stock quantity by plant</h3><div class="sub">units on hand</div><div id="cQty"></div></div>`;
-  barsRaw("#cQty",list.map(([p,o])=>[p,o.q]));
+      <tbody>${(()=>{const byP={};rows.forEach(r=>{const p=r.plant||"—";(byP[p]=byP[p]||{q:0,v:0,n:0});byP[p].q+=(+r.qty||0);byP[p].v+=(+r.value||0);byP[p].n++;});
+        return Object.entries(byP).sort((a,b)=>b[1].v-a[1].v).map(([p,o])=>`<tr><td>${p}</td><td class="r num">${inr(o.n)}</td><td class="r num">${inr(o.q)}</td><td class="r num">${inr(o.v)}</td></tr>`).join("");})()}</tbody></table></div></div>`;
+  // build stacked data
+  if(ms.length<2){$("#cStack").innerHTML='<div class="cap">Import more than one month to see the stacked trend.</div>';}
+  else stacked("#cStack",ms);
 }
 
-/* ---------- TREND ---------- */
+/* -- Trend -- */
 function vTrend(){
-  const rows=base();
-  const bm={}; rows.forEach(r=>{if(r.month){const o=bm[r.month]=bm[r.month]||{v:0,q:0};o.v+=(+r.value||0);o.q+=(+r.qty||0);}});
-  const ms=Object.keys(bm).sort();
-  if(ms.length<2){ $("#content").innerHTML=needsCol("more than one month",
-     "Stock-value trend needs at least two monthly snapshots. Import a stock file for each month (each file carrying its <b>Month</b> date) and this line chart will grow month by month."); return; }
+  const rows=base(),ms=months(rows);
+  if(ms.length<2){$("#content").innerHTML=needs("more than one month","Trend needs at least two monthly snapshots. Import a stock file for each month (each carrying its Month date) and these charts grow month by month.");return;}
   $("#content").innerHTML=`
-    <div class="card one"><h3>Inventory value over time</h3><div class="sub">total stock value per month</div><div id="cLine"></div></div>
-    <div class="card"><h3>Month-by-month</h3><div class="sub">value & quantity</div>
+    <div class="card"><div class="chdr"><div><h3>Inventory Trend — by month</h3><div class="sub">value (line) & quantity (bars)</div></div>
+      <div class="tabs" id="trTabs"><button data-m="all" class="${TREND_MODE==='all'?'on':''}">All combined</button><button data-m="plant" class="${TREND_MODE==='plant'?'on':''}">By plant</button><button data-m="cat" class="${TREND_MODE==='cat'?'on':''}">By category</button></div></div>
+      <div id="cTrend"></div></div>
+    <div class="card"><h3>Month-by-month</h3><div class="sub">combined value & quantity</div>
       <div class="twrap"><table><thead><tr><th>Month</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th><th class="r">MoM %</th></tr></thead>
-      <tbody>${ms.map((m,i)=>{const v=bm[m].v,pv=i?bm[ms[i-1]].v:0,ch=i&&pv?((v-pv)/pv*100):null;return `<tr><td>${m}</td><td class="r num">${inr(bm[m].q)}</td><td class="r num">${inr(v)}</td><td class="r num">${ch==null?"—":(ch>=0?"+":"")+ch.toFixed(1)+"%"}</td></tr>`;}).join("")}</tbody></table></div>
-    </div>`;
-  line("#cLine",ms.map(m=>[m,bm[m].v]));
+      <tbody>${(()=>{const bm={};rows.forEach(r=>{if(r.month){const o=bm[r.month]=bm[r.month]||{v:0,q:0};o.v+=(+r.value||0);o.q+=(+r.qty||0);}});
+        return ms.map((m,i)=>{const v=bm[m].v,pv=i?bm[ms[i-1]].v:0,ch=i&&pv?((v-pv)/pv*100):null;return `<tr><td>${MLAB(m)}</td><td class="r num">${inr(bm[m].q)}</td><td class="r num">${inr(v)}</td><td class="r num">${ch==null?"—":(ch>=0?"+":"")+ch.toFixed(1)+"%"}</td></tr>`;}).join("");})()}</tbody></table></div></div>`;
+  $("#trTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{TREND_MODE=b.dataset.m;vTrend();});
+  drawTrend("#cTrend",rows,ms);
+}
+function drawTrend(id,rows,ms){
+  if(TREND_MODE==="all"){
+    const bm={};rows.forEach(r=>{if(r.month){const o=bm[r.month]=bm[r.month]||{v:0,q:0};o.v+=(+r.value||0);o.q+=(+r.qty||0);}});
+    combo(id,ms.map(m=>MLAB(m)),ms.map(m=>bm[m].v),ms.map(m=>bm[m].q));
+  }else{
+    const key=TREND_MODE==="plant"?"plant":"category";
+    const groups=[...new Set(rows.map(r=>r[key]||"—"))];
+    const tot={};groups.forEach(g=>tot[g]=rows.filter(r=>(r[key]||"—")===g).reduce((s,r)=>s+(+r.value||0),0));
+    const top=groups.sort((a,b)=>tot[b]-tot[a]).slice(0,6);
+    const series=top.map(g=>({name:g,pts:ms.map(m=>rows.filter(r=>r.month===m&&(r[key]||"—")===g).reduce((s,r)=>s+(+r.value||0),0)/1e7)}));
+    multiLine(id,ms.map(m=>MLAB(m)),series);
+  }
 }
 
-/* ---------- MOVEMENT & ABC ---------- */
+/* -- Movement & ABC -- */
 function vABC(){
-  const rows=current();
+  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>r.last_movement);
+  const mv=[["Healthy / moving",0,45,"#2563c9"],["Slow-moving",45,180,"#e08a1e"],["Non-moving",180,365,"#159f6e"],["Dead / obsolete-risk",365,1e9,"#7c54f2"]];
+  const mvv=mv.map(x=>{let v=0;rows.forEach(r=>{const d=ageDays(r,asOf);if(d!=null&&d>=x[1]&&d<x[2])v+=(+r.value||0);});return [x[0],v];});
+  // ABC by value
   const items=[...rows].map(r=>({...r,value:+r.value||0})).sort((a,b)=>b.value-a.value);
-  const T=items.reduce((s,r)=>s+r.value,0)||1; let cum=0;
-  items.forEach(r=>{cum+=r.value; r._cp=cum/T*100; r._cls=r._cp<=70?"A":r._cp<=90?"B":"C";});
-  const grp={A:{n:0,v:0},B:{n:0,v:0},C:{n:0,v:0}};
-  items.forEach(r=>{grp[r._cls].n++;grp[r._cls].v+=r.value;});
+  const T=items.reduce((s,r)=>s+r.value,0)||1;let cum=0;
+  items.forEach(r=>{cum+=r.value;r._cls=(cum/T*100)<=70?"A":(cum/T*100)<=90?"B":"C";});
+  // XYZ by monthly value variability
+  const allMs=months(base());
+  const cv={};
+  if(allMs.length>=2){
+    const byItem={};
+    base().forEach(r=>{const k=r.item_code+"|"+r.plant;(byItem[k]=byItem[k]||{}); byItem[k][r.month]=(byItem[k][r.month]||0)+(+r.value||0);});
+    Object.keys(byItem).forEach(k=>{const vals=allMs.map(m=>byItem[k][m]||0);const mean=vals.reduce((s,v)=>s+v,0)/vals.length;
+      if(mean<=0){cv[k]=2;return;}const sd=Math.sqrt(vals.reduce((s,v)=>s+(v-mean)*(v-mean),0)/vals.length);cv[k]=sd/mean;});
+  }
+  const xyz=k=>{const c=cv[k];if(c==null)return "Y";return c<0.25?"X":c<0.6?"Y":"Z";};
+  const M={A:{X:0,Y:0,Z:0},B:{X:0,Y:0,Z:0},C:{X:0,Y:0,Z:0}};
+  items.forEach(r=>{M[r._cls][xyz(r.item_code+"|"+r.plant)]++;});
+  const mx=Math.max(1,...["A","B","C"].flatMap(a=>["X","Y","Z"].map(x=>M[a][x])));
+  const heat=n=>{const t=n/mx;const r=Math.round(214-(214-37)*t),g=Math.round(224-(224-99)*t),b=Math.round(248-(248-235)*t);return `rgb(${r},${g},${b})`;};
+  const grp={A:{n:0,v:0},B:{n:0,v:0},C:{n:0,v:0}};items.forEach(r=>{grp[r._cls].n++;grp[r._cls].v+=r.value;});
   $("#content").innerHTML=`
-    <div class="grid">
-      <div class="card"><h3>ABC by value</h3><div class="sub">A = top 70% of value · B = next 20% · C = last 10%</div>
-        <div class="twrap"><table><thead><tr><th>Class</th><th class="r">Items</th><th class="r">Value (₹)</th><th class="r">% of value</th></tr></thead>
-        <tbody>${["A","B","C"].map(c=>`<tr><td><span class="pill p${c}">${c}</span></td><td class="r num">${inr(grp[c].n)}</td><td class="r num">${inr(grp[c].v)}</td><td class="r num">${(grp[c].v/T*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div>
-        <div class="note"><b>Class A</b> items are few but hold most of your money — watch them closely. <b>Class C</b> are many but low value — simpler controls are fine.</div>
-      </div>
-      <div class="card"><h3>Value share</h3><div class="sub">A / B / C</div><div id="cAbc"></div></div>
-    </div>
-    <div class="card"><h3>Items (ranked by value)</h3><div class="sub">top 100</div>
-      <div class="twrap"><table><thead><tr><th>#</th><th>Class</th><th>Item Code</th><th>Description</th><th>Plant</th><th class="r">Value (₹)</th><th class="r">Cum %</th></tr></thead>
-      <tbody>${items.slice(0,100).map((r,i)=>`<tr><td>${i+1}</td><td><span class="pill p${r._cls}">${r._cls}</span></td><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td class="r num">${inr(r.value)}</td><td class="r num">${r._cp.toFixed(1)}%</td></tr>`).join("")}</tbody></table></div>
-    </div>`;
-  donut("#cAbc",[["A",grp.A.v],["B",grp.B.v],["C",grp.C.v]]);
+    <div class="grid eq">
+      <div class="card"><h3>Inventory Value by Movement</h3><div class="sub">${hasMove?"how much is actually turning":"needs last-movement date"}</div><div id="cMove"></div></div>
+      <div class="card"><h3>ABC / XYZ Classification</h3><div class="sub">value importance × demand steadiness</div>
+        <div class="matrix"><div></div><div class="hd">X</div><div class="hd">Y</div><div class="hd">Z</div>
+        ${["A","B","C"].map(a=>`<div class="rh">${a}</div>`+["X","Y","Z"].map(x=>`<div class="cell" style="background:${heat(M[a][x])};color:${M[a][x]/mx>0.5?'#fff':'#15233b'}">${M[a][x]}</div>`).join("")).join("")}</div>
+        <div class="cap">A/B/C = share of value · X/Y/Z = steady → erratic demand (from month-to-month variation)</div></div></div>
+    <div class="card"><h3>ABC summary</h3><div class="sub">A = top 70% of value · B = next 20% · C = last 10%</div>
+      <div class="twrap"><table><thead><tr><th>Class</th><th class="r">Items</th><th class="r">Value (₹)</th><th class="r">% of value</th></tr></thead>
+      <tbody>${["A","B","C"].map(c=>`<tr><td><span class="pill p${c}">${c}</span></td><td class="r num">${inr(grp[c].n)}</td><td class="r num">${inr(grp[c].v)}</td><td class="r num">${(grp[c].v/T*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div>
+      <div class="note"><b>Class A</b> items are few but hold most of your money — watch them closely. <b>Class C</b> are many but low value.</div></div>`;
+  donutD("#cMove",mvv,mv.map(x=>x[3]));
 }
 
-/* ---------- STOCK-OUT (needs consumption) ---------- */
+/* -- Stock-out (reserved) -- */
 function vStockout(){
-  $("#content").innerHTML=needsCol("consumption / goods-issue data",
-   "Stock-out risk compares how fast each item is used against what's on hand. That needs <b>consumption (goods-issued)</b> figures, which this cloud app doesn't hold yet. When you're ready, we can add a consumption upload and switch this page on — the layout is already reserved for it.");
+  $("#content").innerHTML=`
+    <div class="card"><h3>Days of Cover vs Lead Time</h3><div class="sub">red = runs out before the next delivery</div>
+      <div class="empty" style="padding:26px"><div class="em">🔒</div><h4>Needs consumption & lead-time data</h4>
+      <div style="max-width:560px;margin:0 auto">Stock-out risk compares how fast each item is used against what's on hand and the reorder lead time. That consumption data isn't in the cloud app yet. When you're ready (Option B), we add a consumption upload and this page switches on — the layout is already reserved for it.</div></div></div>
+    <div class="card"><h3>At-risk Items</h3><div class="sub">reorder soon</div>
+      <div class="empty"><div>No consumption data loaded — nothing to flag yet.</div></div></div>`;
 }
-/* ---------- FORECAST (needs consumption) ---------- */
+/* -- Forecast (reserved) -- */
 function vForecast(){
-  $("#content").innerHTML=needsCol("consumption history",
-   "Demand forecast projects future usage from past <b>consumption</b>. Once consumption history is added to the cloud app, this page will show projected demand and suggested reorder points. It's ready to switch on when you want the feature.");
+  $("#content").innerHTML=`
+    <div class="card"><h3>Predictive Demand Forecast</h3><div class="sub">projected consumption & cover</div>
+      <div class="empty" style="padding:30px"><div class="em">🔒</div><h4>Needs consumption history</h4>
+      <div style="max-width:560px;margin:0 auto">Demand forecast projects future usage from past <b>consumption</b>. Once consumption history is added to the cloud (Option B), this page shows actual vs forecast and months of cover per item — exactly like your desktop app. It's ready to switch on when you want it.</div></div></div>`;
 }
 
-/* ---------- DETAILS ---------- */
+/* -- Details -- */
+let DET_Q="";
 function vDetails(){
   const rows=current().sort((a,b)=>(+b.value||0)-(+a.value||0));
-  $("#content").innerHTML=`<div class="card"><h3>Inventory details</h3><div class="sub">current view · ${inr(rows.length)} rows</div>
-    <div class="twrap"><table><thead><tr><th>Month</th><th>Item Code</th><th>Description</th><th>Plant</th><th>Category</th><th class="r">Qty</th><th class="r">Value (₹)</th><th>Last Movement</th></tr></thead>
-    <tbody>${rows.slice(0,800).map(r=>`<tr><td>${r.month||""}</td><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.plant||""}</td><td>${r.category||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${r.last_movement||""}</td></tr>`).join("")}</tbody></table></div>
-    <div class="cap">Showing ${Math.min(rows.length,800)} of ${inr(rows.length)} rows. Use the filters above or Export CSV for the full set.</div></div>`;
+  $("#content").innerHTML=`<div class="card">
+    <div class="chdr"><div><h3>Inventory Details</h3><div class="sub">full material list · ${inr(rows.length)} rows</div></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input class="inp" id="detQ" placeholder="Search material, code, category…" value="${DET_Q}" style="min-width:230px">
+        <button class="exp" id="detExp">⭳ Export Excel</button></div></div>
+    <div class="twrap"><table><thead><tr><th>Code</th><th>Description</th><th>Category</th><th>Plant</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th><th>Last Movement</th></tr></thead>
+    <tbody id="detBody"></tbody></table></div><div class="cap" id="detCap"></div></div>`;
+  const draw=()=>{const q=norm(DET_Q);
+    const f=rows.filter(r=>!q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q));
+    $("#detBody").innerHTML=f.slice(0,600).map(r=>`<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.category||""}</td><td>${r.plant||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${r.last_movement||""}</td></tr>`).join("");
+    $("#detCap").textContent=`Showing ${Math.min(f.length,600)} of ${inr(f.length)} rows. Use Export for the complete list.`;};
+  $("#detQ").addEventListener("input",e=>{DET_Q=e.target.value;draw();});
+  $("#detExp").onclick=()=>exportCSV(rows.filter(r=>{const q=norm(DET_Q);return !q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q);}));
+  draw();
 }
 
-/* ---------- helpers ---------- */
-function agg(rows,key){const o={};rows.forEach(r=>{const k=r[key]||"—";o[k]=(o[k]||0)+(+r.value||0);});return Object.entries(o).sort((a,b)=>b[1]-a[1]);}
-function needsCol(what,html){return `<div class="card"><div class="empty"><div class="em">🔒</div>
-  <h4>This page needs ${what}</h4><div style="max-width:560px;margin:0 auto">${html}</div></div></div>`;}
-
-const PAL=["#2563c9","#e08a1e","#159f6e","#7a5af0","#1597a6","#d8443a","#9aa7bd","#c9792b",
-           "#3b82f6","#f6a823","#1fc17d","#9168f7","#2bb8c9","#ff6b7f"];
-/* value bars (₹ in Cr) */
-function bars(id,data){ drawBars(id,data,v=>v/1e7,v=>rupee(v),(v)=>v.toFixed(1),PAL,null); }
-function barsColored(id,data){ drawBars(id,data.map(d=>[d[0],d[1]]),v=>v/1e7,v=>rupee(v),v=>v.toFixed(1),null,data.map(d=>d[2])); }
-function barsRaw(id,data){ drawBars(id,data,v=>v,v=>inr(v),v=>fmtK(v),PAL,null); }  // qty bars
-function fmtK(v){return v>=1e5?(v/1e5).toFixed(1)+"L":v>=1e3?(v/1e3).toFixed(1)+"k":Math.round(v);}
+/* ===== helpers ===== */
+function needs(what,html){return `<div class="card"><div class="empty"><div class="em">🔒</div><h4>This page needs ${what}</h4><div style="max-width:560px;margin:0 auto">${html}</div></div></div>`;}
+const PAL=["#2563c9","#e08a1e","#159f6e","#7a5af0","#1597a6","#d8443a","#9aa7bd","#c9792b","#3b82f6","#f6a823","#1fc17d","#9168f7","#2bb8c9","#ff6b7f"];
+function bars(id,data){drawBars(id,data,v=>v/1e7,v=>rupee(v),v=>v.toFixed(1),PAL,null);}
+function barsC(id,data){drawBars(id,data.map(d=>[d[0],d[1]]),v=>v/1e7,v=>rupee(v),v=>v.toFixed(1),null,data.map(d=>d[2]));}
 function drawBars(id,data,scale,tip,lab,pal,cols){
-  const host=$(id); if(!host)return; host.innerHTML="";
+  const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
   if(!data.length){host.innerHTML='<div class="cap">No data in this view.</div>';return;}
   const W=Math.max(360,host.clientWidth||600),rot=data.length>6,B=rot?104:48,H=rot?330:260,L=52,R=12,Tp=22;
   const sc=data.map(d=>scale(d[1])),mx=Math.max(1,...sc);
-  let svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
-  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;svg+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#e3e9f3"/>`+
-    `<text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#8491a6">${(mx*(1-i/4)).toFixed(mx<10?1:0)}</text>`;}
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${T.grid}"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="${T.txt}">${(mx*(1-i/4)).toFixed(mx<10?1:0)}</text>`;}
   const slot=(W-L-R)/data.length,bw=Math.min(48,slot*0.55);
   data.forEach((d,i)=>{const v=sc[i],h=(H-Tp-B)*(v/mx),cx=L+slot*i+slot/2,x=cx-bw/2,y=H-B-h,col=cols?cols[i]:pal[i%pal.length];
-    svg+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="5" fill="${col}"><title>${d[0]}: ${tip(d[1])}</title></rect>`;
-    svg+=`<text x="${cx}" y="${y-6}" text-anchor="middle" font-size="12" font-weight="700" fill="#15233b">${lab(v)}</text>`;
+    s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="5" fill="${col}"><title>${d[0]}: ${tip(d[1])}</title></rect>`;
+    s+=`<text x="${cx}" y="${y-6}" text-anchor="middle" font-size="12" font-weight="700" fill="${T.strong}">${lab(v)}</text>`;
     const nm=(d[0].length>16?d[0].slice(0,15)+"…":d[0]),ny=H-B+(rot?15:20);
-    svg+=rot?`<text x="${cx}" y="${ny}" transform="rotate(-35 ${cx} ${ny})" text-anchor="end" font-size="11" fill="#55657f">${nm}</text>`
-            :`<text x="${cx}" y="${ny}" text-anchor="middle" font-size="12" fill="#55657f">${nm}</text>`;});
-  host.innerHTML=svg+"</svg>";
+    s+=rot?`<text x="${cx}" y="${ny}" transform="rotate(-35 ${cx} ${ny})" text-anchor="end" font-size="11" fill="${T.txt}">${nm}</text>`:`<text x="${cx}" y="${ny}" text-anchor="middle" font-size="12" fill="${T.txt}">${nm}</text>`;});
+  host.innerHTML=s+"</svg>";
 }
-function donut(id,data){
-  const host=$(id); if(!host)return; host.innerHTML="";
-  data=data.filter(d=>d[1]>0); const tot=data.reduce((s,d)=>s+d[1],0)||1;
+function donut(id,data,legendVals){donutBase(id,data,PAL,legendVals);}
+function donutD(id,data,cols){donutBase(id,data,cols,true);}
+function donutBase(id,data,pal,legendVals){
+  const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
+  data=data.filter(d=>d[1]>0);const tot=data.reduce((s,d)=>s+d[1],0)||1;
   const W=Math.max(300,host.clientWidth||360),H=260,cx=W/2,cy=H/2,rO=Math.min(110,H/2-14),rI=rO*0.6;
-  let a=-Math.PI/2,svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`,lg="";
-  data.forEach((d,i)=>{const f=d[1]/tot,a2=a+f*2*Math.PI;
+  let a=-Math.PI/2,s=`<svg viewBox="0 0 ${W} ${H}" class="chart">`,lg="";
+  data.forEach((d,i)=>{const f=d[1]/tot,a2=a+f*2*Math.PI;const col=pal[i%pal.length];
     const x1=cx+rO*Math.cos(a),y1=cy+rO*Math.sin(a),x2=cx+rO*Math.cos(a2),y2=cy+rO*Math.sin(a2);
-    const xi2=cx+rI*Math.cos(a2),yi2=cy+rI*Math.sin(a2),xi1=cx+rI*Math.cos(a),yi1=cy+rI*Math.sin(a);
-    const laf=f>.5?1:0;
-    svg+=`<path d="M${x1} ${y1} A${rO} ${rO} 0 ${laf} 1 ${x2} ${y2} L${xi2} ${yi2} A${rI} ${rI} 0 ${laf} 0 ${xi1} ${yi1} Z" fill="${PAL[i%PAL.length]}"><title>${d[0]}: ${rupee(d[1])} (${(f*100).toFixed(1)}%)</title></path>`;
-    lg+=`<span style="display:inline-flex;align-items:center;gap:5px;margin:3px 10px 0 0;font-size:11.5px;color:#55657f"><i style="width:10px;height:10px;border-radius:3px;background:${PAL[i%PAL.length]};display:inline-block"></i>${d[0]}</span>`;
-    a=a2;});
-  svg+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="18" font-weight="800" fill="#15233b">${rupee(tot)}</text>`;
-  svg+=`<text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="11" fill="#8491a6">total</text></svg>`;
-  host.innerHTML=svg+`<div style="margin-top:8px">${lg}</div>`;
+    const xi2=cx+rI*Math.cos(a2),yi2=cy+rI*Math.sin(a2),xi1=cx+rI*Math.cos(a),yi1=cy+rI*Math.sin(a),laf=f>.5?1:0;
+    s+=`<path d="M${x1} ${y1} A${rO} ${rO} 0 ${laf} 1 ${x2} ${y2} L${xi2} ${yi2} A${rI} ${rI} 0 ${laf} 0 ${xi1} ${yi1} Z" fill="${col}"><title>${d[0]}: ${rupee(d[1])} (${(f*100).toFixed(1)}%)</title></path>`;
+    lg+=`<span><i style="background:${col}"></i>${d[0]}${legendVals?` — ${rupee(d[1])}`:""}</span>`;a=a2;});
+  s+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="18" font-weight="800" fill="${T.strong}">${rupee(tot)}</text><text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="11" fill="${T.txt}">total value</text></svg>`;
+  host.innerHTML=s+`<div class="legend">${lg}</div>`;
 }
-function line(id,data){
-  const host=$(id); if(!host)return; host.innerHTML="";
-  const W=Math.max(360,host.clientWidth||700),H=300,L=56,R=16,B=46,Tp=20;
-  const vs=data.map(d=>d[1]/1e7),mx=Math.max(1,...vs),mn=Math.min(...vs,0);
-  const X=i=>L+(W-L-R)*(data.length<2?0.5:i/(data.length-1));
-  const Y=v=>Tp+(H-Tp-B)*(1-(v-mn)/((mx-mn)||1));
-  let svg=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
-  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4,val=mx-(mx-mn)*i/4;
-    svg+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#e3e9f3"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#8491a6">${val.toFixed(1)}</text>`;}
-  let pts=data.map((d,i)=>`${X(i)},${Y(vs[i])}`).join(" ");
-  svg+=`<polyline points="${pts}" fill="none" stroke="#2f6bf0" stroke-width="2.5"/>`;
-  svg+=`<polygon points="${L},${H-B} ${pts} ${X(data.length-1)},${H-B}" fill="#2f6bf0" opacity="0.08"/>`;
-  data.forEach((d,i)=>{svg+=`<circle cx="${X(i)}" cy="${Y(vs[i])}" r="4" fill="#2f6bf0"><title>${d[0]}: ${rupee(d[1])}</title></circle>`;
-    svg+=`<text x="${X(i)}" y="${Y(vs[i])-10}" text-anchor="middle" font-size="11" font-weight="700" fill="#15233b">${vs[i].toFixed(1)}</text>`;
-    svg+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="#55657f">${d[0]}</text>`;});
-  host.innerHTML=svg+"</svg>";
+function combo(id,labels,valCr,qty){
+  const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
+  const vs=valCr.map(v=>v/1e7),mxV=Math.max(0.1,...vs),mxQ=Math.max(1,...qty);
+  const W=Math.max(360,host.clientWidth||760),H=320,L=52,R=60,B=40,Tp=20,n=labels.length;
+  const X=i=>L+(W-L-R)*(n<2?0.5:i/(n-1));
+  const YV=v=>Tp+(H-Tp-B)*(1-v/mxV),YQ=q=>Tp+(H-Tp-B)*(1-q/mxQ);
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${T.grid}"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="10" fill="${T.txt}">${(mxV*(1-i/4)).toFixed(1)}</text><text x="${W-R+6}" y="${y+4}" font-size="10" fill="${T.txt}">${Math.round(mxQ*(1-i/4)).toLocaleString("en-IN")}</text>`;}
+  const slot=(W-L-R)/n,bw=Math.min(34,slot*0.4);
+  qty.forEach((q,i)=>{const h=(H-Tp-B)*(q/mxQ),x=X(i)-bw/2,y=H-B-h;s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="4" fill="#e08a1e" opacity="0.85"><title>${labels[i]} qty: ${inr(q)}</title></rect>`;});
+  let pts=vs.map((v,i)=>`${X(i)},${YV(v)}`).join(" ");
+  s+=`<polyline points="${pts}" fill="none" stroke="#2563c9" stroke-width="2.5"/>`;
+  vs.forEach((v,i)=>{s+=`<circle cx="${X(i)}" cy="${YV(v)}" r="4" fill="#2563c9"><title>${labels[i]} value: ${rupee(valCr[i])}</title></circle>`;});
+  labels.forEach((l,i)=>{s+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="${T.txt}">${l}</text>`;});
+  host.innerHTML=s+"</svg>"+`<div class="legend"><span><i style="background:#2563c9"></i>Value (₹ Cr)</span><span><i style="background:#e08a1e"></i>Quantity (units)</span></div>`;
+}
+function multiLine(id,labels,series){
+  const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
+  const mx=Math.max(0.1,...series.flatMap(s=>s.pts));
+  const W=Math.max(360,host.clientWidth||760),H=320,L=52,R=16,B=40,Tp=20,n=labels.length;
+  const X=i=>L+(W-L-R)*(n<2?0.5:i/(n-1)),Y=v=>Tp+(H-Tp-B)*(1-v/mx);
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart">`,lg="";
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${T.grid}"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="10" fill="${T.txt}">${(mx*(1-i/4)).toFixed(1)}</text>`;}
+  series.forEach((se,si)=>{const col=PAL[si%PAL.length];let pts=se.pts.map((v,i)=>`${X(i)},${Y(v)}`).join(" ");
+    s+=`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.4"/>`;
+    se.pts.forEach((v,i)=>{s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="3" fill="${col}"><title>${se.name} · ${labels[i]}: ${rupee(v*1e7)}</title></circle>`;});
+    lg+=`<span><i style="background:${col}"></i>${se.name}</span>`;});
+  labels.forEach((l,i)=>{s+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="${T.txt}">${l}</text>`;});
+  host.innerHTML=s+"</svg>"+`<div class="legend">${lg}</div>`;
+}
+function stacked(id,ms){
+  const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
+  const rows=base();
+  const catTot={};rows.forEach(r=>{catTot[r.category||"—"]=(catTot[r.category||"—"]||0)+(+r.value||0);});
+  const cats=Object.keys(catTot).sort((a,b)=>catTot[b]-catTot[a]);const top=cats.slice(0,6),rest=cats.slice(6);
+  const series=top.concat(rest.length?["Other"]:[]);
+  const data=ms.map(m=>{const o={};series.forEach(c=>o[c]=0);rows.filter(r=>r.month===m).forEach(r=>{const c=top.includes(r.category||"—")?(r.category||"—"):"Other";if(o[c]!=null)o[c]+=(+r.value||0);});return o;});
+  const totals=data.map(o=>Object.values(o).reduce((s,v)=>s+v,0)/1e7),mx=Math.max(0.1,...totals);
+  const W=Math.max(360,host.clientWidth||760),H=320,L=52,R=12,B=40,Tp=20,n=ms.length;
+  const slot=(W-L-R)/n,bw=Math.min(46,slot*0.5);
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart">`,lg="";
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4;s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${T.grid}"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="10" fill="${T.txt}">${(mx*(1-i/4)).toFixed(1)}</text>`;}
+  data.forEach((o,i)=>{let yAcc=H-B;const cx=L+slot*i+slot/2,x=cx-bw/2;
+    series.forEach((c,ci)=>{const v=o[c]/1e7,h=(H-Tp-B)*(v/mx);if(h<=0)return;yAcc-=h;s+=`<rect x="${x}" y="${yAcc}" width="${bw}" height="${h}" fill="${PAL[ci%PAL.length]}"><title>${MLAB(ms[i])} · ${c}: ${rupee(o[c])}</title></rect>`;});
+    s+=`<text x="${cx}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="${T.txt}">${MLAB(ms[i])}</text>`;});
+  series.forEach((c,ci)=>lg+=`<span><i style="background:${PAL[ci%PAL.length]}"></i>${c}</span>`);
+  host.innerHTML=s+"</svg>"+`<div class="legend">${lg}</div>`;
 }
 
-/* filters re-render */
+/* ===== filters / import / export ===== */
 ["fMonth","fPlant","fCat"].forEach(id=>$("#"+id).addEventListener("change",render));
-$("#fSearch").addEventListener("input",render);
 $("#refreshBtn").onclick=loadData;
 window.addEventListener("resize",()=>{clearTimeout(window._rz);window._rz=setTimeout(render,200);});
-window.go=go;
 
-/* ============================ IMPORT ============================ */
 $("#importBtn").onclick=()=>{$("#impMsg").textContent="";$("#file").value="";$("#replace").checked=false;$("#scrim").classList.add("on");};
 $("#impCancel").onclick=()=>$("#scrim").classList.remove("on");
-$("#impGo").onclick=async ()=>{
-  const f=$("#file").files[0], msg=$("#impMsg");
+$("#impGo").onclick=async()=>{
+  const f=$("#file").files[0],msg=$("#impMsg");
   if(!f){msg.textContent="Please choose a file first.";return;}
   msg.textContent="Reading file…";
   try{
-    const buf=await f.arrayBuffer();
-    const wb=XLSX.read(buf,{type:"array",cellDates:true});
+    const buf=await f.arrayBuffer();const wb=XLSX.read(buf,{type:"array",cellDates:true});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""}).filter(r=>r.some(c=>String(c).trim()!==""));
     if(arr.length<2){msg.textContent="No rows found in the file.";return;}
-    const headers=arr[0].map(String);
-    const col={}; for(const k in ALIASES) col[k]=pickCol(headers,k);
+    const headers=arr[0].map(String),col={};for(const k in ALIASES)col[k]=pickCol(headers,k);
     if(!col.item_code){msg.textContent="Couldn't find an item-code column (Material / Item Code / Part No).";return;}
-    const idx={}; headers.forEach((h,i)=>idx[h]=i);
-    const get=(row,k)=> col[k]!=null ? row[idx[col[k]]] : "";
+    const idx={};headers.forEach((h,i)=>idx[h]=i);const get=(row,k)=>col[k]!=null?row[idx[col[k]]]:"";
     const rows=[];
-    for(let i=1;i<arr.length;i++){
-      const row=arr[i];
-      const code=String(get(row,"item_code")??"").trim();
-      if(!code || code.toLowerCase().startsWith("example")) continue;
-      const qty=n2(get(row,"qty")), uv=n2(get(row,"unit_value"));
-      let val=n2(get(row,"value")); if(!val && uv) val=qty*uv;
-      rows.push({month:toDate(get(row,"month")), item_code:code,
-        description:String(get(row,"description")??"").trim(),
-        plant:String(get(row,"plant")??"").trim()||null,
-        category:String(get(row,"category")??"").trim()||null,
-        qty:qty, unit_value:uv, value:val, last_movement:toDate(get(row,"last_movement"))});
-    }
+    for(let i=1;i<arr.length;i++){const row=arr[i];const code=String(get(row,"item_code")??"").trim();
+      if(!code||code.toLowerCase().startsWith("example"))continue;
+      const qty=n2(get(row,"qty")),uv=n2(get(row,"unit_value"));let val=n2(get(row,"value"));if(!val&&uv)val=qty*uv;
+      rows.push({month:toDate(get(row,"month")),item_code:code,description:String(get(row,"description")??"").trim(),
+        plant:String(get(row,"plant")??"").trim()||null,category:String(get(row,"category")??"").trim()||null,
+        qty:qty,unit_value:uv,value:val,last_movement:toDate(get(row,"last_movement"))});}
     if(!rows.length){msg.textContent="No usable rows found.";return;}
     msg.textContent=`Found ${rows.length} rows. Saving…`;
-    if($("#replace").checked){
-      const del=await sb.from("inventory").delete().neq("id",-1);
-      if(del.error){msg.textContent="Could not clear old data: "+del.error.message;return;}
-    }
-    for(let i=0;i<rows.length;i+=500){
-      const {error}=await sb.from("inventory").insert(rows.slice(i,i+500));
-      if(error){msg.textContent="Save failed: "+error.message;return;}
-      msg.textContent=`Saving… ${Math.min(i+500,rows.length)}/${rows.length}`;
-    }
-    msg.textContent=`Imported ${rows.length} rows.`;
-    await loadData();
-    setTimeout(()=>$("#scrim").classList.remove("on"),700);
+    if($("#replace").checked){const del=await sb.from("inventory").delete().neq("id",-1);if(del.error){msg.textContent="Could not clear old data: "+del.error.message;return;}}
+    for(let i=0;i<rows.length;i+=500){const {error}=await sb.from("inventory").insert(rows.slice(i,i+500));if(error){msg.textContent="Save failed: "+error.message;return;}msg.textContent=`Saving… ${Math.min(i+500,rows.length)}/${rows.length}`;}
+    msg.textContent=`Imported ${rows.length} rows.`;await loadData();setTimeout(()=>$("#scrim").classList.remove("on"),700);
   }catch(err){msg.textContent="Error reading file: "+err.message;}
 };
-
-/* ============================ EXPORT ============================ */
-$("#exportBtn").onclick=()=>{
-  const rows=current();
-  if(!rows.length){alert("Nothing to export in this view.");return;}
+function exportCSV(rows){
+  if(!rows||!rows.length){alert("Nothing to export in this view.");return;}
   const cols=["month","item_code","description","plant","category","qty","unit_value","value","last_movement"];
-  const esc=c=>{c=(c==null?"":String(c)); return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;};
+  const esc=c=>{c=(c==null?"":String(c));return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;};
   const csv=[cols.join(",")].concat(rows.map(r=>cols.map(c=>esc(r[c])).join(","))).join("\n");
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="inventory_export.csv";document.body.appendChild(a);a.click();a.remove();
-};
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download="inventory_export.csv";document.body.appendChild(a);a.click();a.remove();
+}
+$("#exportBtn").onclick=()=>exportCSV(current());
 
-/* ============================ START ============================ */
+/* ===== start ===== */
 sb.auth.onAuthStateChange(()=>refreshAuthUI());
 refreshAuthUI();
 </script>
