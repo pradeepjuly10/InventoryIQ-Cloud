@@ -190,7 +190,15 @@ td.r{text-align:right}
 <script>
 const SUPABASE_URL  = "https://otivfbrxclvwofbcymay.supabase.co";
 const SUPABASE_ANON = "sb_publishable_zlPF5ZdyS3CggHIFdc4eZQ_yVTrU7s9";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth:{
+    persistSession:true, autoRefreshToken:true, detectSessionInUrl:false,
+    // pass-through lock: stops sign-in from waiting on a lock held by another/old tab
+    lock:(name,acquireTimeout,fn)=>fn()
+  }
+});
+function clearAuthStorage(){ try{ for(const k of Object.keys(localStorage)){ if(k.indexOf("sb-")===0) localStorage.removeItem(k); } }catch(e){} }
+function withTimeout(p,ms){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]); }
 const $ = s => document.querySelector(s);
 let ROWS=[], VIEW="overview", TREND_MODE="all", THEME="light";
 const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
@@ -256,7 +264,9 @@ const MLAB=d=>{const[y,m]=d.split("-");return ["Jan","Feb","Mar","Apr","May","Ju
 
 /* ===== AUTH (instant login: show app first, load data after) ===== */
 async function refreshAuthUI(){
-  const {data}=await sb.auth.getSession();
+  let data;
+  try{ const r=await withTimeout(sb.auth.getSession(),8000); data=r.data; }
+  catch(e){ clearAuthStorage(); data={session:null}; }   // bad stored token: treat as logged out
   if(data.session){
     $("#login").style.display="none"; $("#app").classList.add("on");
     $("#who").textContent=data.session.user.email; buildNav(); applyTheme();
@@ -266,9 +276,16 @@ async function refreshAuthUI(){
 }
 $("#loginForm").addEventListener("submit",async e=>{
   e.preventDefault();const msg=$("#loginMsg");msg.className="msg";msg.textContent="Signing in…";
-  const {error}=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#password").value});
-  if(error){msg.className="msg err";msg.textContent=error.message;}
-  else{msg.className="msg ok";msg.textContent="Welcome!";}
+  const creds={email:$("#email").value.trim(),password:$("#password").value};
+  try{
+    const {error}=await withTimeout(sb.auth.signInWithPassword(creds),15000);
+    if(error){msg.className="msg err";msg.textContent=error.message;}
+    else{msg.className="msg ok";msg.textContent="Welcome!";}
+  }catch(err){
+    // sign-in stalled (usually a stuck lock from an old tab): self-heal
+    msg.className="msg";msg.textContent="Taking too long — clearing and retrying…";
+    clearAuthStorage(); setTimeout(()=>location.reload(),900);
+  }
 });
 $("#logoutBtn").onclick=async()=>{ROWS=[];await sb.auth.signOut();};
 
