@@ -744,19 +744,25 @@ function vProcurement(){
 let DET_Q="";
 function vDetails(){
   const rows=current().sort((a,b)=>(+b.value||0)-(+a.value||0));
+  const asOf=asOfDate(rows), hasMove=rows.some(r=>lastMove(r));
   $("#content").innerHTML=`<div class="card">
     <div class="chdr"><div><h3>Inventory Details</h3><div class="sub">full material list · ${inr(rows.length)} rows</div></div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input class="inp" id="detQ" placeholder="Search material, code, category…" value="${DET_Q}" style="min-width:230px">
         <button class="exp" id="detExp">⭳ Export Excel</button></div></div>
-    <div class="twrap"><table><thead><tr><th>Code</th><th>Description</th><th>Category</th><th>Plant</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th><th>Last Movement</th></tr></thead>
-    <tbody id="detBody"></tbody></table></div><div class="cap" id="detCap"></div></div>`;
+    <div class="twrap"><table><thead><tr><th>Code</th><th>Description</th><th>Category</th><th>Plant</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th><th>Last Movement</th><th class="r">Age (days)</th><th>Status</th></tr></thead>
+    <tbody id="detBody"></tbody></table></div><div class="cap" id="detCap"></div>
+    ${hasMove?'<div class="note">Last-movement dates are worked out from your monthly snapshots (the latest month each item\'s quantity changed). Add a Last Movement column to your file to override them.</div>':''}</div>`;
+  const ageTag=d=>{if(d==null)return'<span class="pill" style="background:#eef1f7;color:#8491a6">no data</span>';
+    if(d>=AGE_DEAD)return'<span class="pill pC">Dead</span>'; if(d>=AGE_RISK)return'<span class="pill pC">Obsolete-risk</span>';
+    if(d>=AGE_SLOW)return'<span class="pill pB">Slow</span>'; return'<span class="pill pA">Active</span>';};
   const draw=()=>{const q=norm(DET_Q);
     const f=rows.filter(r=>!q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q));
-    $("#detBody").innerHTML=f.slice(0,600).map(r=>`<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.category||""}</td><td>${r.plant||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${r.last_movement||""}</td></tr>`).join("");
+    $("#detBody").innerHTML=f.slice(0,600).map(r=>{const lm=lastMove(r),d=ageDays(r,asOf);
+      return `<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.category||""}</td><td>${r.plant||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${lm||"—"}</td><td class="r num">${d==null?"—":inr(d)}</td><td>${ageTag(d)}</td></tr>`;}).join("");
     $("#detCap").textContent=`Showing ${Math.min(f.length,600)} of ${inr(f.length)} rows. Use Export for the complete list.`;};
   $("#detQ").addEventListener("input",e=>{DET_Q=e.target.value;draw();});
-  $("#detExp").onclick=()=>exportCSV(rows.filter(r=>{const q=norm(DET_Q);return !q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q);}));
+  $("#detExp").onclick=()=>exportCSV(rows.filter(r=>{const q=norm(DET_Q);return !q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q);}),asOf);
   draw();
 }
 
@@ -926,11 +932,14 @@ $("#impGo").onclick=async()=>{
     msg.textContent=`Imported ${rows.length} rows.`;await loadData();setTimeout(()=>$("#scrim").classList.remove("on"),700);
   }catch(err){msg.textContent="Error reading file: "+err.message;}
 };
-function exportCSV(rows){
+function exportCSV(rows,asOf){
   if(!rows||!rows.length){alert("Nothing to export in this view.");return;}
-  const cols=["month","item_code","description","plant","category","qty","unit_value","value","last_movement"];
+  if(asOf==null)asOf=asOfDate(rows);
+  const cols=["month","item_code","description","plant","category","qty","unit_value","value","last_movement","age_days"];
   const esc=c=>{c=(c==null?"":String(c));return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;};
-  const csv=[cols.join(",")].concat(rows.map(r=>cols.map(c=>esc(r[c])).join(","))).join("\n");
+  const row=r=>{const lm=lastMove(r),d=ageDays(r,asOf);
+    return [r.month,r.item_code,r.description,r.plant,r.category,r.qty,r.unit_value,r.value,lm||"",d==null?"":d].map(esc).join(",");};
+  const csv=[cols.join(",")].concat(rows.map(row)).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);a.download="inventory_export.csv";document.body.appendChild(a);a.click();a.remove();
 }
