@@ -80,7 +80,7 @@ button{font:inherit;cursor:pointer}
 .kpis.light .kpi.b-green{border-top-color:var(--green)}.kpis.light .kpi.b-amber{border-top-color:var(--amber)}
 .kpis.light .kpi.b-red{border-top-color:var(--red)}.kpis.light .kpi.b-purple{border-top-color:var(--purple)}
 .sechd{font-size:11.5px;font-weight:800;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin:4px 0 10px}
-.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
 .act{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;box-shadow:var(--shadow);padding:13px 14px;cursor:pointer;transition:.12s}
 .act:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(20,40,80,.14)}
 .act.red{border-left-color:var(--red)}.act.amber{border-left-color:var(--amber)}.act.purple{border-left-color:var(--purple)}.act.grey{border-left-color:#c3cdde;opacity:.72;cursor:default}
@@ -183,6 +183,8 @@ td.r{text-align:right}
       <select class="inp" id="impType" style="flex:1">
         <option value="stock">Stock (on-hand quantity &amp; value)</option>
         <option value="consumption">Consumption (goods issued per month)</option>
+        <option value="po">Purchase Orders (open POs)</option>
+        <option value="pr">Purchase Requests (open PRs)</option>
       </select></div>
     <div class="row"><input type="file" id="file" accept=".csv,.xlsx,.xls"></div>
     <div class="row"><label style="font-size:12.5px"><input type="checkbox" id="replace"> Replace ALL existing data of this type first</label></div>
@@ -204,7 +206,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 function clearAuthStorage(){ try{ for(const k of Object.keys(localStorage)){ if(k.indexOf("sb-")===0) localStorage.removeItem(k); } }catch(e){} }
 function withTimeout(p,ms){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]); }
 const $ = s => document.querySelector(s);
-let ROWS=[], CONS=[], VIEW="overview", TREND_MODE="all", THEME="light";
+let ROWS=[], CONS=[], POS=[], PRS=[], VIEW="overview", TREND_MODE="all", THEME="light";
 const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
 const LEAD_DAYS=45;        // assumed reorder lead time (days) for stock-out risk
 const EXCESS_MONTHS=6;     // more than this many months of cover = excess stock
@@ -244,6 +246,46 @@ function turnsInfo(rows){ const m=onHandMap(rows);let annualConsVal=0,stockVal=0
   Object.keys(m).forEach(k=>{annualConsVal+=avgCons(k)*(m[k].uv||0)*12;stockVal+=m[k].val;});
   const turns=stockVal>0?annualConsVal/stockVal:0; return {turns,days:turns>0?365/turns:0,stockVal}; }
 const fmtNum=v=>v>=1e5?(v/1e5).toFixed(1)+"L":v>=1e3?(v/1e3).toFixed(1)+"k":Math.round(v).toString();
+/* ---- procurement (PO / PR) ---- */
+const hasPO=()=>POS.length>0, hasPR=()=>PRS.length>0;
+let ITEM_CAT={}, ITEM_UV={};
+function computeMeta(){ ITEM_CAT={};ITEM_UV={};
+  ROWS.forEach(r=>{ if(r.item_code){ if(r.category)ITEM_CAT[r.item_code]=r.category; }
+    const k=(r.item_code||"")+"|"+(r.plant||""); const uv=+r.unit_value|| ((+r.qty)?(+r.value||0)/(+r.qty):0); if(uv)ITEM_UV[k]=uv; }); }
+function isOpen(s){ s=String(s||"").toLowerCase().trim(); if(!s)return true; return !/(clos|receiv|complete|cancel|grn|done|deliver|gr done)/.test(s); }
+function inScope(x){ const p=$("#fPlant").value,c=$("#fCat").value;
+  if(p!=="ALL" && x.plant!==p) return false;
+  if(c!=="ALL" && ITEM_CAT[x.item_code]!==c) return false; return true; }
+function openPOs(){ return POS.filter(p=>isOpen(p.status)&&inScope(p)); }
+function openPRs(){ return PRS.filter(p=>isOpen(p.status)&&inScope(p)); }
+function poValue(p){ const v=+p.value||0; if(v)return v; const k=(p.item_code||"")+"|"+(p.plant||""); return (+p.po_qty||0)*(ITEM_UV[k]||0); }
+function prValue(p){ const k=(p.item_code||"")+"|"+(p.plant||""); return (+p.pr_qty||0)*(ITEM_UV[k]||0); }
+function onOrderValue(){ return openPOs().reduce((s,p)=>s+poValue(p),0); }
+function openPOqtyByKey(){ const m={}; openPOs().forEach(p=>{const k=(p.item_code||"")+"|"+(p.plant||"");m[k]=(m[k]||0)+(+p.po_qty||0);}); return m; }
+/* Problem POs: open POs that are overdue OR for already-overstocked items */
+function problemPOs(oh){ const out=[]; openPOs().forEach(p=>{ const k=(p.item_code||"")+"|"+(p.plant||"");
+    const overdue = p.expected_date && Date.parse(p.expected_date) < Date.now();
+    const a=avgCons(k), over = a>0 && oh[k] && (oh[k].qty/a > EXCESS_MONTHS);
+    if(overdue||over) out.push(Object.assign({},p,{_overdue:overdue,_over:over,_val:poValue(p)})); });
+  return out; }
+/* Redundant PRs: open PRs for items already covered (on-hand + open PO) beyond target */
+function redundantPRs(oh){ const po=openPOqtyByKey(); const out=[]; openPRs().forEach(r=>{ const k=(r.item_code||"")+"|"+(r.plant||"");
+    const a=avgCons(k); if(a<=0) return; const onhand=(oh[k]?oh[k].qty:0)+(po[k]||0);
+    if(onhand/a > EXCESS_MONTHS) out.push(Object.assign({},r,{_cover:onhand/a,_val:prValue(r)})); });
+  return out; }
+/* Transfer saves: same item short at one plant, excess at another */
+function transferSaves(){ const byItem={};
+  // need on-hand across ALL plants (not plant-filtered) for the latest month, respecting category filter
+  const c=$("#fCat").value; const latest=(function(){const ms=months(ROWS);return ms.length?ms[ms.length-1]:null;})();
+  const rows=ROWS.filter(r=>(c==="ALL"||r.category===c) && ($("#fMonth").value==="ALL"? r.month===latest : r.month===$("#fMonth").value));
+  rows.forEach(r=>{ const it=r.item_code; (byItem[it]=byItem[it]||[]); byItem[it].push(r); });
+  let count=0,val=0,list=[];
+  Object.keys(byItem).forEach(it=>{ let excessQ=0,shortQ=0,uv=0;
+    byItem[it].forEach(r=>{ const k=(r.item_code||"")+"|"+(r.plant||""); const a=avgCons(k); uv=uv||ITEM_UV[k]||(+r.unit_value||0);
+      if(a>0){ const over=(+r.qty||0)-EXCESS_MONTHS*a; if(over>0)excessQ+=over;
+        const need=(LEAD_DAYS/30)*a-(+r.qty||0); if(need>0)shortQ+=need; } });
+    const t=Math.min(excessQ,shortQ); if(t>0){ count++; val+=t*uv; list.push({item:it,qty:Math.round(t),val:t*uv}); } });
+  return {count,val,list:list.sort((a,b)=>b.val-a.val)}; }
 
 /* theme colours for charts */
 function tk(){ return THEME==="dark"
@@ -260,6 +302,7 @@ const IC={
   stockout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/></svg>',
   forecast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15a4 4 0 0 1 4-4 5 5 0 0 1 9.6-1.5A3.5 3.5 0 1 1 18 18H7a4 4 0 0 1-4-3z"/></svg>',
   details:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/></svg>',
+  procurement:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.2l2.3 12.5a1.5 1.5 0 0 0 1.5 1.2h8.8a1.5 1.5 0 0 0 1.5-1.2L21 7H6"/></svg>',
   rupee:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4h12M6 9h12M16 4c0 5-4 6-8 6l7 10"/></svg>',
   box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>',
@@ -277,6 +320,7 @@ const MENU=[
   ["abc","Movement & ABC","What's turning, and what matters most"],
   ["stockout","Stock-out Risk","Items that run dry before resupply"],
   ["forecast","Demand Forecast","Predicted consumption & cover"],
+  ["procurement","Procurement","Open POs, problem POs & requests"],
   ["details","Inventory Details","Full material list & export"]
 ];
 const ALIASES={
@@ -296,6 +340,23 @@ const ALIASES_CONS={
   qty_issued:["qty issued","quantity issued","issued","goods issued","goods issue","consumption","consumed","issue qty","issues","qty consumed","gi qty","gi quantity","total issued","issued qty"]
 };
 function pickColM(hs,map,f){const H=hs.map(norm);for(const a of map[f]){const i=H.indexOf(a);if(i>=0)return hs[i];}return null;}
+/* purchase order / request columns */
+const ALIASES_PO={
+  item_code:ALIASES.item_code, plant:ALIASES.plant,
+  po_no:["po no","po number","po","purchase order","po_no","document","order no"],
+  po_qty:["po qty","order qty","po quantity","open qty","ordered qty","quantity","qty","pending qty"],
+  order_date:["order date","po date","document date","created"],
+  expected_date:["expected date","expected","delivery date","due date","promised date","eta","expected delivery"],
+  status:["status","po status","state"],
+  value:["value","po value","amount","net value","order value"]
+};
+const ALIASES_PR={
+  item_code:ALIASES.item_code, plant:ALIASES.plant,
+  pr_no:["pr no","pr number","pr","purchase requisition","requisition","pr_no","indent no"],
+  pr_qty:["pr qty","requested qty","pr quantity","quantity","qty","requisition qty","indent qty"],
+  pr_date:["pr date","requisition date","date","created","indent date"],
+  status:["status","pr status","state"]
+};
 const norm=h=>(h==null?"":String(h).trim().toLowerCase().replace(/\s+/g," "));
 function pickCol(hs,f){const H=hs.map(norm);for(const a of ALIASES[f]){const i=H.indexOf(a);if(i>=0)return hs[i];}return null;}
 function toDate(v){if(v==null||v==="")return null;if(v instanceof Date)return v.toISOString().slice(0,10);
@@ -357,9 +418,11 @@ async function loadData(){
   const {data,error}=await sb.from("inventory").select("*").order("value",{ascending:false}).limit(12000);
   if(error){$("#content").innerHTML=`<div class="empty"><div class="em">⚠️</div><h4>Could not load data</h4><div>${error.message}</div></div>`;return;}
   ROWS=data||[];
-  // consumption table is optional — ignore the error if it doesn't exist yet
+  // these tables are optional — ignore errors if they don't exist yet
   try{ const c=await sb.from("consumption").select("*").limit(20000); CONS=(c&&!c.error&&c.data)?c.data:[]; }catch(e){ CONS=[]; }
-  computeDerived();computeCons();buildFilters();render();
+  try{ const p=await sb.from("purchase_orders").select("*").limit(20000); POS=(p&&!p.error&&p.data)?p.data:[]; }catch(e){ POS=[]; }
+  try{ const q=await sb.from("purchase_requests").select("*").limit(20000); PRS=(q&&!q.error&&q.data)?q.data:[]; }catch(e){ PRS=[]; }
+  computeDerived();computeCons();computeMeta();buildFilters();render();
 }
 /* Derive each item's last-movement date from its monthly snapshots:
    the latest month in which its quantity changed = it moved then.
@@ -406,7 +469,7 @@ function momValue(){const bm={};base().forEach(r=>{if(r.month)bm[r.month]=(bm[r.
 /* ===== RENDER ===== */
 function render(){
   if(!ROWS.length){$("#content").innerHTML=`<div class="empty"><div class="em">📦</div><h4>No data yet</h4><div>Click <b>Import data</b> and upload a stock file (.xlsx / .csv).</div></div>`;return;}
-  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,abc:vABC,stockout:vStockout,forecast:vForecast,details:vDetails}[VIEW]||vOverview)();
+  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,abc:vABC,stockout:vStockout,forecast:vForecast,procurement:vProcurement,details:vDetails}[VIEW]||vOverview)();
 }
 
 /* -- Overview -- */
@@ -426,18 +489,22 @@ function vOverview(){
     ${kpi("k-amber",IC.list,"No. of Materials",inr(nItems),"distinct item-plant lines")}
     ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d · tap`:"import 2+ months to enable")}
     ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · tap`:"import 2+ months to enable")}</div>`;
-  const zeroN=rows.filter(r=>(+r.qty||0)<=0).length;
+  const oh=onHandMap(rows);
   const excV=hasCons()?excessValue(rows):null, soN=hasCons()?stockoutList(rows).filter(x=>x.cover<LEAD_DAYS).length:null;
-  const card4 = hasCons()
-    ? `<div class="act ${soN?'red':'grey'}" onclick="go('stockout')"><div class="big num">${inr(soN)}</div><div class="lb">Stock-out risk</div><div class="nt">cover < ${LEAD_DAYS} days · tap</div></div>`
-    : `<div class="act ${zeroN?'':'grey'}" onclick="go('details')"><div class="big num">${inr(zeroN)}</div><div class="lb">Zero / negative qty</div><div class="nt">review in Details</div></div>`;
-  const card3 = hasCons()
-    ? `<div class="act amber" onclick="go('ageing')"><div class="big num">${rupee(excV)}</div><div class="lb">Excess inventory</div><div class="nt">above ${EXCESS_MONTHS} months cover</div></div>`
-    : `<div class="act purple" onclick="go('ageing')"><div class="big num">${hasMove?rupee(deadV):"—"}</div><div class="lb">Dead stock</div><div class="nt">no movement > ${AGE_DEAD} days</div></div>`;
-  const acts=`<div class="sechd">Action Centre — tap a card for the line items</div><div class="acts">
-    <div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(slowV):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>
-    <div class="act red" onclick="go('ageing')"><div class="big num">${hasMove?rupee(riskV):"—"}</div><div class="lb">Toward obsolete</div><div class="nt">no movement > ${AGE_RISK} days</div></div>
-    ${card3}${card4}</div>`;
+  const cards=[];
+  cards.push(`<div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(slowV):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>`);
+  cards.push(`<div class="act red" onclick="go('ageing')"><div class="big num">${hasMove?rupee(riskV):"—"}</div><div class="lb">Toward obsolete</div><div class="nt">no movement > ${AGE_RISK} days</div></div>`);
+  if(hasCons()){
+    cards.push(`<div class="act amber" onclick="go('ageing')"><div class="big num">${rupee(excV)}</div><div class="lb">Excess inventory</div><div class="nt">above ${EXCESS_MONTHS} months cover</div></div>`);
+    cards.push(`<div class="act ${soN?'red':'grey'}" onclick="go('stockout')"><div class="big num">${inr(soN)}</div><div class="lb">Stock-out risk</div><div class="nt">cover < ${LEAD_DAYS} days · tap</div></div>`);
+  }else{
+    cards.push(`<div class="act purple" onclick="go('ageing')"><div class="big num">${hasMove?rupee(deadV):"—"}</div><div class="lb">Dead stock</div><div class="nt">no movement > ${AGE_DEAD} days</div></div>`);
+    cards.push(`<div class="act grey" onclick="go('details')"><div class="big num">${inr(rows.filter(r=>(+r.qty||0)<=0).length)}</div><div class="lb">Zero / negative qty</div><div class="nt">review in Details</div></div>`);
+  }
+  if(hasPO()){const probs=problemPOs(oh);cards.push(`<div class="act ${probs.length?'red':'grey'}" onclick="go('procurement')"><div class="big num">${inr(probs.length)}</div><div class="lb">Problem POs</div><div class="nt">cancel / expedite · tap</div></div>`);}
+  if(hasPR()){const reds=redundantPRs(oh);cards.push(`<div class="act ${reds.length?'amber':'grey'}" onclick="go('procurement')"><div class="big num">${inr(reds.length)}</div><div class="lb">Redundant PRs</div><div class="nt">stop double-buy · tap</div></div>`);}
+  if(hasCons()&&(hasPO()||hasPR())){const tr=transferSaves();cards.push(`<div class="act ${tr.count?'purple':'grey'}" onclick="go('procurement')"><div class="big num">${rupee(tr.val)}</div><div class="lb">Transfer saves</div><div class="nt">move don't buy · tap</div></div>`);}
+  const acts=`<div class="sechd">Action Centre — tap a card for the line items</div><div class="acts">${cards.join("")}</div>`;
   const charts=`<div class="grid">
     <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
     <div class="card"><h3>Inventory Value by Category</h3><div class="sub">share of total stock value</div><div id="cCat"></div></div></div>`;
@@ -508,7 +575,7 @@ function vStock(){
       ${lk("b-green",'Active SKUs',inr(skus),"item-plant lines")}
       ${lk("b-red",'Stock-out Risk',soN==null?"—":inr(soN),soN==null?"needs consumption data":"items · before resupply")}
       ${lk("b-amber",'Inventory Turns',ti==null?"—":ti.turns.toFixed(1)+"×",ti==null?"needs consumption data":Math.round(ti.days)+" days on hand")}
-      ${lk("b-purple",'On Order (open PO)',"—","Stage 2 · needs PO data")}
+      ${lk("b-purple",'On Order (open PO)',hasPO()?rupee(onOrderValue()):"—",hasPO()?inr(openPOs().length)+" open POs · tap":"needs PO data")}
     </div>
     <div class="card"><h3>Stock Value by Category — by month</h3><div class="sub">₹ Cr stacked over time</div><div id="cStack"></div></div>
     <div class="card"><h3>On-hand by plant</h3><div class="sub">quantity & value per location</div>
@@ -644,6 +711,33 @@ function drawForecast(oh){
     else if(monthsCover<1.5)verdict=`only ${monthsCover.toFixed(1)} months of cover — reorder soon.`;
     else verdict=`about ${monthsCover.toFixed(1)} months of cover — healthy.`;
   $("#fcNote").innerHTML=`<b>${name}:</b> on hand ${inr(o.qty)} · avg use ${inr(Math.round(avgCons(FC_KEY)))}/mo · forecast ${inr(Math.round(fc))}/mo → ${verdict}`;
+}
+
+/* -- Procurement -- */
+function vProcurement(){
+  if(!hasPO()&&!hasPR()){$("#content").innerHTML=needs("purchase-order / request data","This page shows open <b>purchase orders</b>, overdue or over-ordered POs, and <b>redundant purchase requests</b> (buying what you already have). Click <b>Import data</b>, choose <b>Purchase Orders</b> or <b>Purchase Requests</b>, and upload your file — then this page switches on.");return;}
+  const oh=onHandMap(current());
+  const ords=openPOs(), probs=problemPOs(oh), reds=redundantPRs(oh), tr=transferSaves();
+  const lk=(c,k,v,d)=>`<div class="kpi ${c}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
+  const today=Date.now();
+  $("#content").innerHTML=`
+    <div class="kpis light">
+      ${lk("",'On order (open PO)',hasPO()?rupee(onOrderValue()):"—",inr(ords.length)+" open POs")}
+      ${lk("b-red",'Problem POs',hasPO()?inr(probs.length):"—","overdue or over-ordered")}
+      ${lk("b-amber",'Redundant PRs',hasPR()?inr(reds.length):"—","already covered · stop double-buy")}
+      ${lk("b-green",'Transfer saves',hasCons()?rupee(tr.val):"—",inr(tr.count)+" items · move don't buy")}
+    </div>
+    ${hasPO()?`<div class="card"><h3>Problem purchase orders</h3><div class="sub">overdue delivery, or ordering an item you're already overstocked on</div>
+      <div class="twrap"><table><thead><tr><th>PO No</th><th>Item</th><th>Plant</th><th class="r">PO Qty</th><th>Expected</th><th>Status</th><th class="r">Value (₹)</th><th>Flag</th></tr></thead>
+      <tbody>${probs.slice(0,200).map(p=>`<tr><td>${p.po_no||""}</td><td>${p.item_code||""}</td><td>${p.plant||""}</td><td class="r num">${inr(+p.po_qty||0)}</td><td>${p.expected_date||""}</td><td>${p.status||"open"}</td><td class="r num">${inr(p._val)}</td><td>${p._overdue?'<span class="pill pC">Overdue</span> ':''}${p._over?'<span class="pill pB">Over-ordered</span>':''}</td></tr>`).join("")||`<tr><td colspan="8" style="color:var(--ink3)">No problem POs — all on track. ✅</td></tr>`}</tbody></table></div>
+      <div class="cap">${inr(probs.length)} of ${inr(ords.length)} open POs flagged.</div></div>`:""}
+    ${hasPR()?`<div class="card"><h3>Redundant purchase requests</h3><div class="sub">items already covered beyond ${EXCESS_MONTHS} months (on-hand + open POs) — likely safe to cancel</div>
+      <div class="twrap"><table><thead><tr><th>PR No</th><th>Item</th><th>Plant</th><th class="r">PR Qty</th><th class="r">Cover (months)</th><th class="r">Value (₹)</th></tr></thead>
+      <tbody>${reds.slice(0,200).map(r=>`<tr><td>${r.pr_no||""}</td><td>${r.item_code||""}</td><td>${r.plant||""}</td><td class="r num">${inr(+r.pr_qty||0)}</td><td class="r num">${r._cover.toFixed(1)}</td><td class="r num">${inr(r._val)}</td></tr>`).join("")||`<tr><td colspan="6" style="color:var(--ink3)">No redundant PRs${hasCons()?"":" — (needs consumption data to judge cover)"}. ✅</td></tr>`}</tbody></table></div></div>`:""}
+    ${hasCons()&&tr.count?`<div class="card"><h3>Transfer opportunities</h3><div class="sub">same item is short at one plant and excess at another — move instead of buying</div>
+      <div class="twrap"><table><thead><tr><th>Item</th><th class="r">Transferable qty</th><th class="r">Est. value saved (₹)</th></tr></thead>
+      <tbody>${tr.list.slice(0,100).map(t=>`<tr><td>${t.item}</td><td class="r num">${inr(t.qty)}</td><td class="r num">${inr(t.val)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="note">Potential saving of <b>${rupee(tr.val)}</b> by moving stock between plants instead of raising new purchase orders.</div></div>`:""}`;
 }
 
 /* -- Details -- */
@@ -786,6 +880,31 @@ $("#impGo").onclick=async()=>{
         if(error){msg.textContent=(/relation|does not exist|schema cache/i.test(error.message)?"Consumption table not found — run the new schema SQL in Supabase first.":"Save failed: "+error.message);return;}
         msg.textContent=`Saving… ${Math.min(i+500,rows.length)}/${rows.length}`;}
       msg.textContent=`Imported ${rows.length} consumption rows.`;await loadData();setTimeout(()=>$("#scrim").classList.remove("on"),700);
+      return;
+    }
+
+    if(type==="po"||type==="pr"){
+      const map=type==="po"?ALIASES_PO:ALIASES_PR, table=type==="po"?"purchase_orders":"purchase_requests";
+      const col={};for(const k in map)col[k]=pickColM(headers,map,k);
+      if(!col.item_code){msg.textContent="Couldn't find an item-code column (Material / Item Code).";return;}
+      const get=(row,k)=>col[k]!=null?row[idx[col[k]]]:"";
+      const rows=[];
+      for(let i=1;i<arr.length;i++){const row=arr[i];const code=String(get(row,"item_code")??"").trim();
+        if(!code||code.toLowerCase().startsWith("example"))continue;
+        if(type==="po") rows.push({po_no:String(get(row,"po_no")??"").trim()||null,item_code:code,
+          plant:String(get(row,"plant")??"").trim()||null,po_qty:n2(get(row,"po_qty")),
+          order_date:toDate(get(row,"order_date")),expected_date:toDate(get(row,"expected_date")),
+          status:String(get(row,"status")??"").trim()||null,value:n2(get(row,"value"))});
+        else rows.push({pr_no:String(get(row,"pr_no")??"").trim()||null,item_code:code,
+          plant:String(get(row,"plant")??"").trim()||null,pr_qty:n2(get(row,"pr_qty")),
+          pr_date:toDate(get(row,"pr_date")),status:String(get(row,"status")??"").trim()||null});}
+      if(!rows.length){msg.textContent="No usable rows found.";return;}
+      msg.textContent=`Found ${rows.length} rows. Saving…`;
+      if($("#replace").checked){const del=await sb.from(table).delete().neq("id",-1);if(del.error){msg.textContent="Could not clear old data: "+del.error.message;return;}}
+      for(let i=0;i<rows.length;i+=500){const {error}=await sb.from(table).insert(rows.slice(i,i+500));
+        if(error){msg.textContent=(/relation|does not exist|schema cache/i.test(error.message)?"That table isn't in Supabase yet — run the Stage 2 schema SQL first.":"Save failed: "+error.message);return;}
+        msg.textContent=`Saving… ${Math.min(i+500,rows.length)}/${rows.length}`;}
+      msg.textContent=`Imported ${rows.length} rows.`;await loadData();setTimeout(()=>$("#scrim").classList.remove("on"),700);
       return;
     }
 
