@@ -370,17 +370,22 @@ function rupee(n){const a=Math.abs(n);if(a>=1e7)return "₹"+(n/1e7).toFixed(2)+
 const inr=n=>Math.round(n).toLocaleString("en-IN");
 const MLAB=d=>{const[y,m]=d.split("-");return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(+m)-1]+"-"+y.slice(2);};
 
-/* ===== AUTH (instant login: show app first, load data after) ===== */
-async function refreshAuthUI(){
-  let data;
-  try{ const r=await withTimeout(sb.auth.getSession(),8000); data=r.data; }
-  catch(e){ clearAuthStorage(); data={session:null}; }   // bad stored token: treat as logged out
-  if(data.session){
-    $("#login").style.display="none"; $("#app").classList.add("on");
-    $("#who").textContent=data.session.user.email; buildNav(); applyTheme();
-    if(!ROWS.length){ $("#content").innerHTML='<div class="empty"><div class="em">⏳</div><h4>Loading your inventory…</h4></div>'; }
-    loadData();
-  }else{ $("#login").style.display="grid"; $("#app").classList.remove("on"); }
+/* ===== AUTH =====
+   You stay logged in until you click Sign out. Token auto-refreshes (which fire
+   every few seconds / on idle) NO LONGER re-check or clear the session, so the
+   screen never bounces back to login on its own. */
+let AUTHED=false;
+function showLogin(){ $("#login").style.display="grid"; $("#app").classList.remove("on"); }
+function showApp(session){
+  AUTHED=true;
+  $("#login").style.display="none"; $("#app").classList.add("on");
+  $("#who").textContent=session.user.email; buildNav(); applyTheme();
+  if(!ROWS.length){ $("#content").innerHTML='<div class="empty"><div class="em">⏳</div><h4>Loading your inventory…</h4></div>'; }
+  loadData();
+}
+async function initAuth(){
+  try{ const {data}=await sb.auth.getSession(); if(data&&data.session) showApp(data.session); else showLogin(); }
+  catch(e){ showLogin(); }
 }
 $("#loginForm").addEventListener("submit",async e=>{
   e.preventDefault();const msg=$("#loginMsg");msg.className="msg";msg.textContent="Signing in…";
@@ -395,7 +400,7 @@ $("#loginForm").addEventListener("submit",async e=>{
     clearAuthStorage(); setTimeout(()=>location.reload(),900);
   }
 });
-$("#logoutBtn").onclick=async()=>{ROWS=[];await sb.auth.signOut();};
+$("#logoutBtn").onclick=async()=>{AUTHED=false;ROWS=[];CONS=[];POS=[];PRS=[];try{await sb.auth.signOut();}catch(e){} showLogin();};
 
 /* ===== NAV ===== */
 function buildNav(){
@@ -946,8 +951,12 @@ function exportCSV(rows,asOf){
 $("#exportBtn").onclick=()=>exportCSV(current());
 
 /* ===== start ===== */
-sb.auth.onAuthStateChange(()=>refreshAuthUI());
-refreshAuthUI();
+sb.auth.onAuthStateChange((event,session)=>{
+  if(session){ if(!AUTHED) showApp(session); }          // just signed in → show app once
+  else if(event==="SIGNED_OUT"){ AUTHED=false; showLogin(); }  // only an explicit sign-out logs out
+  // TOKEN_REFRESHED / other events with a live session are ignored — no re-check, no bounce
+});
+initAuth();
 </script>
 </body>
 </html>
