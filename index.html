@@ -309,8 +309,24 @@ try{const t=localStorage.getItem("iq_theme");if(t)THEME=t;}catch(e){}
 async function loadData(){
   const {data,error}=await sb.from("inventory").select("*").order("value",{ascending:false}).limit(12000);
   if(error){$("#content").innerHTML=`<div class="empty"><div class="em">⚠️</div><h4>Could not load data</h4><div>${error.message}</div></div>`;return;}
-  ROWS=data||[];buildFilters();render();
+  ROWS=data||[];computeDerived();buildFilters();render();
 }
+/* Derive each item's last-movement date from its monthly snapshots:
+   the latest month in which its quantity changed = it moved then.
+   Mirrors the desktop app, so Ageing works even without a Last Movement column. */
+let DERIVED={};
+function computeDerived(){
+  DERIVED={};const byKey={};
+  ROWS.forEach(r=>{if(!r.month)return;const k=(r.item_code||"")+"|"+(r.plant||"");(byKey[k]=byKey[k]||[]).push(r);});
+  Object.keys(byKey).forEach(k=>{
+    const rs=byKey[k].slice().sort((a,b)=>a.month<b.month?-1:1);
+    if(rs.length<2)return;                       // need history to tell if it moved
+    let last=null,prevQ=null;
+    rs.forEach(r=>{const q=+r.qty||0;if(prevQ!=null&&q!==prevQ)last=r.month;prevQ=q;});
+    DERIVED[k]=last||rs[0].month;                // never changed -> idle since first snapshot (floor)
+  });
+}
+function lastMove(r){ return r.last_movement || DERIVED[(r.item_code||"")+"|"+(r.plant||"")] || null; }
 function buildFilters(){
   const months=[...new Set(ROWS.map(r=>r.month).filter(Boolean))].sort().reverse();
   const plants=[...new Set(ROWS.map(r=>r.plant).filter(Boolean))].sort();
@@ -328,9 +344,11 @@ function months(rows){return [...new Set(rows.map(r=>r.month).filter(Boolean))].
 function current(){const rows=base(),m=$("#fMonth").value;
   if(m!=="ALL")return rows.filter(r=>r.month===m);
   const ms=months(rows);if(!ms.length)return rows;const latest=ms[ms.length-1];return rows.filter(r=>r.month===latest);}
-function asOfDate(rows){let mx=0;rows.forEach(r=>{if(r.last_movement){const t=Date.parse(r.last_movement);if(t>mx)mx=t;}});
-  const m=$("#fMonth").value; if(m!=="ALL"){const t=Date.parse(m+"T00:00:00");if(t>mx)mx=t;} return mx||Date.now();}
-function ageDays(r,asOf){if(!r.last_movement)return null;return Math.floor((asOf-Date.parse(r.last_movement))/DAY);}
+function asOfDate(rows){let mx=0;rows.forEach(r=>{const lm=lastMove(r);if(lm){const t=Date.parse(lm);if(t>mx)mx=t;}});
+  const m=$("#fMonth").value; if(m!=="ALL"){const t=Date.parse(m+"T00:00:00");if(t>mx)mx=t;}
+  else{const ms=months(base());if(ms.length){const t=Date.parse(ms[ms.length-1]+"T00:00:00");if(t>mx)mx=t;}}
+  return mx||Date.now();}
+function ageDays(r,asOf){const lm=lastMove(r);if(!lm)return null;return Math.floor((asOf-Date.parse(lm))/DAY);}
 function agg(rows,key){const o={};rows.forEach(r=>{const k=r[key]||"—";o[k]=(o[k]||0)+(+r.value||0);});return Object.entries(o).sort((a,b)=>b[1]-a[1]);}
 function momValue(){const bm={};base().forEach(r=>{if(r.month)bm[r.month]=(bm[r.month]||0)+(+r.value||0);});
   const ms=Object.keys(bm).sort();if(ms.length<2)return null;const a=bm[ms[ms.length-1]],b=bm[ms[ms.length-2]];return b?(a-b)/b*100:null;}
@@ -343,7 +361,7 @@ function render(){
 
 /* -- Overview -- */
 function vOverview(){
-  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>r.last_movement);
+  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>lastMove(r));
   const totV=rows.reduce((s,r)=>s+(+r.value||0),0),totQ=rows.reduce((s,r)=>s+(+r.qty||0),0);
   const nItems=new Set(rows.map(r=>r.item_code+"|"+r.plant)).size;
   let slowN=0,slowV=0,riskV=0,deadV=0,aged90N=0;
@@ -356,8 +374,8 @@ function vOverview(){
     ${kpi("k-blue",IC.rupee,"Total Inventory Value",rupee(totV),momTxt)}
     ${kpi("k-green",IC.box,"Total Stock Quantity",inr(totQ),"units on hand")}
     ${kpi("k-amber",IC.list,"No. of Materials",inr(nItems),"distinct item-plant lines")}
-    ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d · tap`:"needs last-movement date")}
-    ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · tap`:"needs last-movement date")}</div>`;
+    ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d · tap`:"import 2+ months to enable")}
+    ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · tap`:"import 2+ months to enable")}</div>`;
   const zeroN=rows.filter(r=>(+r.qty||0)<=0).length,noDateN=rows.filter(r=>!r.last_movement).length;
   const acts=`<div class="sechd">Action Centre — tap a card for the line items</div><div class="acts">
     <div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(slowV):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>
@@ -387,8 +405,8 @@ function vValue(){
 
 /* -- Ageing -- */
 function vAgeing(){
-  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>r.last_movement);
-  if(!hasMove){$("#content").innerHTML=needs("last-movement date","Your stock file has no <b>Last Movement</b> column, so ageing can't be calculated. Add a Last Movement Date to each item and re-import — this page fills in automatically.");return;}
+  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>lastMove(r));
+  if(!hasMove){$("#content").innerHTML=needs("movement history","Ageing is worked out from your <b>monthly snapshots</b> (an item moved in the months its quantity changed), or from a <b>Last Movement</b> column if you have one. Import at least <b>two months</b> of stock files and this page fills in automatically.");return;}
   let riskV=0,slowV=0,slowN=0,deadV=0,deadN=0,aged90N=0;
   rows.forEach(r=>{const d=ageDays(r,asOf);if(d==null)return;
     if(d>=AGE_SLOW){slowV+=(+r.value||0);slowN++;aged90N++;}
@@ -477,7 +495,7 @@ function drawTrend(id,rows,ms){
 
 /* -- Movement & ABC -- */
 function vABC(){
-  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>r.last_movement);
+  const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>lastMove(r));
   const mv=[["Healthy / moving",0,45,"#2563c9"],["Slow-moving",45,180,"#e08a1e"],["Non-moving",180,365,"#159f6e"],["Dead / obsolete-risk",365,1e9,"#7c54f2"]];
   const mvv=mv.map(x=>{let v=0;rows.forEach(r=>{const d=ageDays(r,asOf);if(d!=null&&d>=x[1]&&d<x[2])v+=(+r.value||0);});return [x[0],v];});
   // ABC by value
@@ -501,7 +519,7 @@ function vABC(){
   const grp={A:{n:0,v:0},B:{n:0,v:0},C:{n:0,v:0}};items.forEach(r=>{grp[r._cls].n++;grp[r._cls].v+=r.value;});
   $("#content").innerHTML=`
     <div class="grid eq">
-      <div class="card"><h3>Inventory Value by Movement</h3><div class="sub">${hasMove?"how much is actually turning":"needs last-movement date"}</div><div id="cMove"></div></div>
+      <div class="card"><h3>Inventory Value by Movement</h3><div class="sub">${hasMove?"how much is actually turning":"import 2+ months to enable"}</div><div id="cMove"></div></div>
       <div class="card"><h3>ABC / XYZ Classification</h3><div class="sub">value importance × demand steadiness</div>
         <div class="matrix"><div></div><div class="hd">X</div><div class="hd">Y</div><div class="hd">Z</div>
         ${["A","B","C"].map(a=>`<div class="rh">${a}</div>`+["X","Y","Z"].map(x=>`<div class="cell" style="background:${heat(M[a][x])};color:${M[a][x]/mx>0.5?'#fff':'#15233b'}">${M[a][x]}</div>`).join("")).join("")}</div>
