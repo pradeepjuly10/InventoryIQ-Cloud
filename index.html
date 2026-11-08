@@ -37,7 +37,12 @@ button{font:inherit;cursor:pointer}
 /* shell */
 #app{display:none;min-height:100vh;grid-template-columns:224px 1fr}
 #app.on{display:grid}
-.side{background:linear-gradient(180deg,var(--side),var(--side2));color:var(--sideink);display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;align-self:start}
+.side{background:linear-gradient(180deg,var(--side),var(--side2));color:var(--sideink);display:flex;flex-direction:column;height:100vh;overflow-y:auto;position:sticky;top:0;align-self:start}
+.side::-webkit-scrollbar{width:9px}
+.side::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:6px}
+.side::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.30)}
+.side{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
+.sidefoot{margin-top:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:18px 16px 14px}
 .brand .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#2563c9);display:grid;place-items:center;color:#fff;box-shadow:0 6px 16px rgba(47,107,240,.4)}
 .brand .logo svg{width:23px;height:23px}
@@ -139,7 +144,7 @@ td.r{text-align:right}
 .dlg .actions .go{background:var(--blue);color:#fff;border:none}
 .exp{background:var(--green);color:#fff;border:none;border-radius:9px;padding:9px 13px;font-weight:700;display:inline-flex;gap:7px;align-items:center}
 @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.acts{grid-template-columns:repeat(2,1fr)}.grid,.grid.eq{grid-template-columns:1fr}}
-@media(max-width:720px){#app.on{grid-template-columns:1fr}.side{position:static;min-height:0}.nav{flex-direction:row;overflow-x:auto}.nav a{white-space:nowrap}.kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){#app.on{grid-template-columns:1fr}.side{position:static;height:auto;min-height:0;overflow:visible}.nav{flex-direction:row;overflow-x:auto}.nav a{white-space:nowrap}.sidefoot{margin-top:0}.kpis{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
