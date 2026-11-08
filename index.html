@@ -746,28 +746,49 @@ function vProcurement(){
 }
 
 /* -- Details -- */
-let DET_Q="";
+let DET_Q="", DET_STATUS="all", DET_SORT="value_desc";
 function vDetails(){
-  const rows=current().sort((a,b)=>(+b.value||0)-(+a.value||0));
+  const rows=current();
   const asOf=asOfDate(rows), hasMove=rows.some(r=>lastMove(r));
+  const classify=d=> d==null?"nodata": d>=AGE_DEAD?"dead": d>=AGE_RISK?"risk": d>=AGE_SLOW?"slow":"active";
+  const ageTag=d=>{if(d==null)return'<span class="pill" style="background:#eef1f7;color:#8491a6">no data</span>';
+    if(d>=AGE_DEAD)return'<span class="pill pC">Dead</span>'; if(d>=AGE_RISK)return'<span class="pill pC">Obsolete-risk</span>';
+    if(d>=AGE_SLOW)return'<span class="pill pB">Slow</span>'; return'<span class="pill pA">Active</span>';};
+  const opt=(v,l,cur)=>`<option value="${v}" ${v===cur?'selected':''}>${l}</option>`;
   $("#content").innerHTML=`<div class="card">
     <div class="chdr"><div><h3>Inventory Details</h3><div class="sub">full material list · ${inr(rows.length)} rows</div></div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <input class="inp" id="detQ" placeholder="Search material, code, category…" value="${DET_Q}" style="min-width:230px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select class="inp" id="detStatus" title="Status filter">
+          ${opt("all","All statuses",DET_STATUS)}${opt("active","Active only",DET_STATUS)}${opt("slow","Slow (>90d)",DET_STATUS)}${opt("risk","Obsolete-risk (>180d)",DET_STATUS)}${opt("dead","Dead (>365d)",DET_STATUS)}${opt("nodata","No movement data",DET_STATUS)}
+        </select>
+        <select class="inp" id="detSort" title="Sort by">
+          ${opt("value_desc","Sort: Value (high→low)",DET_SORT)}${opt("age_desc","Sort: Age (oldest first)",DET_SORT)}${opt("age_asc","Sort: Age (newest first)",DET_SORT)}${opt("qty_desc","Sort: Qty (high→low)",DET_SORT)}${opt("code","Sort: Code (A→Z)",DET_SORT)}
+        </select>
+        <input class="inp" id="detQ" placeholder="Search…" value="${DET_Q}" style="min-width:170px">
         <button class="exp" id="detExp">⭳ Export Excel</button></div></div>
     <div class="twrap"><table><thead><tr><th>Code</th><th>Description</th><th>Category</th><th>Plant</th><th class="r">Stock Qty</th><th class="r">Value (₹)</th><th>Last Movement</th><th class="r">Age (days)</th><th>Status</th></tr></thead>
     <tbody id="detBody"></tbody></table></div><div class="cap" id="detCap"></div>
     ${hasMove?'<div class="note">Last-movement dates are worked out from your monthly snapshots (the latest month each item\'s quantity changed). Add a Last Movement column to your file to override them.</div>':''}</div>`;
-  const ageTag=d=>{if(d==null)return'<span class="pill" style="background:#eef1f7;color:#8491a6">no data</span>';
-    if(d>=AGE_DEAD)return'<span class="pill pC">Dead</span>'; if(d>=AGE_RISK)return'<span class="pill pC">Obsolete-risk</span>';
-    if(d>=AGE_SLOW)return'<span class="pill pB">Slow</span>'; return'<span class="pill pA">Active</span>';};
-  const draw=()=>{const q=norm(DET_Q);
-    const f=rows.filter(r=>!q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q));
-    $("#detBody").innerHTML=f.slice(0,600).map(r=>{const lm=lastMove(r),d=ageDays(r,asOf);
-      return `<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.category||""}</td><td>${r.plant||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${lm||"—"}</td><td class="r num">${d==null?"—":inr(d)}</td><td>${ageTag(d)}</td></tr>`;}).join("");
+  const filtered=()=>{const q=norm(DET_Q);
+    let f=rows.filter(r=>!q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q))
+            .map(r=>({r,d:ageDays(r,asOf)}));
+    if(DET_STATUS!=="all") f=f.filter(x=>classify(x.d)===DET_STATUS);
+    f.sort((a,b)=>{const s=DET_SORT;
+      if(s==="age_desc") return (b.d==null?-1:b.d)-(a.d==null?-1:a.d);
+      if(s==="age_asc")  return (a.d==null?1e9:a.d)-(b.d==null?1e9:b.d);
+      if(s==="qty_desc") return (+b.r.qty||0)-(+a.r.qty||0);
+      if(s==="code")     return String(a.r.item_code||"").localeCompare(String(b.r.item_code||""));
+      return (+b.r.value||0)-(+a.r.value||0);});
+    return f;};
+  const draw=()=>{const f=filtered();
+    $("#detBody").innerHTML=f.slice(0,600).map(x=>{const r=x.r,lm=lastMove(r),d=x.d;
+      return `<tr><td>${r.item_code||""}</td><td>${r.description||""}</td><td>${r.category||""}</td><td>${r.plant||""}</td><td class="r num">${inr(+r.qty||0)}</td><td class="r num">${inr(+r.value||0)}</td><td>${lm||"—"}</td><td class="r num">${d==null?"—":inr(d)}</td><td>${ageTag(d)}</td></tr>`;}).join("")
+      || `<tr><td colspan="9" style="color:var(--ink3);padding:18px">No items match this filter.</td></tr>`;
     $("#detCap").textContent=`Showing ${Math.min(f.length,600)} of ${inr(f.length)} rows. Use Export for the complete list.`;};
   $("#detQ").addEventListener("input",e=>{DET_Q=e.target.value;draw();});
-  $("#detExp").onclick=()=>exportCSV(rows.filter(r=>{const q=norm(DET_Q);return !q||(`${r.item_code} ${r.description} ${r.category} ${r.plant}`).toLowerCase().includes(q);}),asOf);
+  $("#detStatus").addEventListener("change",e=>{DET_STATUS=e.target.value;draw();});
+  $("#detSort").addEventListener("change",e=>{DET_SORT=e.target.value;draw();});
+  $("#detExp").onclick=()=>exportCSV(filtered().map(x=>x.r),asOf);
   draw();
 }
 
