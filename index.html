@@ -177,11 +177,15 @@ td.r{text-align:right}
 
 <div class="scrim" id="scrim">
   <div class="dlg">
-    <h3>Import inventory data</h3>
-    <p>Choose a CSV or Excel file (.xlsx). Columns are recognised automatically
-       (Material, Plant Name, Stock Quantity, Value, Month, Last Movement …).</p>
+    <h3>Import data</h3>
+    <p>Pick what you're uploading, then choose a CSV or Excel file (.xlsx). Columns are recognised automatically.</p>
+    <div class="row"><label style="font-size:12px;font-weight:700;min-width:95px">I'm uploading</label>
+      <select class="inp" id="impType" style="flex:1">
+        <option value="stock">Stock (on-hand quantity &amp; value)</option>
+        <option value="consumption">Consumption (goods issued per month)</option>
+      </select></div>
     <div class="row"><input type="file" id="file" accept=".csv,.xlsx,.xls"></div>
-    <div class="row"><label style="font-size:12.5px"><input type="checkbox" id="replace"> Replace ALL existing data first</label></div>
+    <div class="row"><label style="font-size:12.5px"><input type="checkbox" id="replace"> Replace ALL existing data of this type first</label></div>
     <div class="msg" id="impMsg"></div>
     <div class="actions"><button id="impCancel">Cancel</button><button class="go" id="impGo">Import</button></div>
   </div>
@@ -200,9 +204,46 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 function clearAuthStorage(){ try{ for(const k of Object.keys(localStorage)){ if(k.indexOf("sb-")===0) localStorage.removeItem(k); } }catch(e){} }
 function withTimeout(p,ms){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]); }
 const $ = s => document.querySelector(s);
-let ROWS=[], VIEW="overview", TREND_MODE="all", THEME="light";
+let ROWS=[], CONS=[], VIEW="overview", TREND_MODE="all", THEME="light";
 const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
+const LEAD_DAYS=45;        // assumed reorder lead time (days) for stock-out risk
+const EXCESS_MONTHS=6;     // more than this many months of cover = excess stock
+const FCAST_MONTHS=3;      // how many months ahead the forecast projects
 const DAY=86400000;
+/* consumption maps, rebuilt on load */
+let CONS_AVG={}, CONS_SERIES={}, CONS_MONTHS=[];
+function computeCons(){
+  CONS_AVG={};CONS_SERIES={};const mset={};
+  CONS.forEach(c=>{const k=(c.item_code||"")+"|"+(c.plant||"");(CONS_SERIES[k]=CONS_SERIES[k]||{});
+    if(c.month){CONS_SERIES[k][c.month]=(CONS_SERIES[k][c.month]||0)+(+c.qty_issued||0);mset[c.month]=1;}});
+  CONS_MONTHS=Object.keys(mset).sort();
+  Object.keys(CONS_SERIES).forEach(k=>{const vals=Object.values(CONS_SERIES[k]);
+    CONS_AVG[k]=vals.length?vals.reduce((s,v)=>s+v,0)/vals.length:0;});
+}
+const hasCons = ()=>CONS.length>0;
+function avgCons(key){ return CONS_AVG[key]||0; }
+/* forecast next N months = average of last 3 actual months (fallback: overall avg) */
+function forecast(key){ const ser=CONS_SERIES[key]||{}; const ms=Object.keys(ser).sort();
+  const last=ms.slice(-3).map(m=>ser[m]); const base=last.length?last.reduce((s,v)=>s+v,0)/last.length:avgCons(key);
+  return base; }
+/* on-hand (latest/selected month) keyed by item|plant */
+function onHandMap(rows){ const m={}; rows.forEach(r=>{const k=(r.item_code||"")+"|"+(r.plant||"");
+    if(!m[k])m[k]={qty:0,uv:+r.unit_value||0,val:0,item:r.item_code,plant:r.plant,desc:r.description,cat:r.category};
+    m[k].qty+=(+r.qty||0); m[k].val+=(+r.value||0);});
+  Object.keys(m).forEach(k=>{if(!m[k].uv&&m[k].qty)m[k].uv=m[k].val/m[k].qty;}); return m; }
+/* items that run below lead-time cover */
+function stockoutList(rows){ const m=onHandMap(rows),out=[];
+  Object.keys(m).forEach(k=>{const a=avgCons(k);if(a<=0)return;const dc=m[k].qty/(a/30);
+    if(dc<LEAD_DAYS*3)out.push(Object.assign({key:k,avg:a,cover:dc},m[k]));});
+  return out.sort((x,y)=>x.cover-y.cover); }
+/* excess value: stock beyond EXCESS_MONTHS of cover */
+function excessValue(rows){ const m=onHandMap(rows);let v=0;
+  Object.keys(m).forEach(k=>{const a=avgCons(k);if(a<=0)return;const over=m[k].qty-EXCESS_MONTHS*a;if(over>0)v+=over*(m[k].uv||0);}); return v; }
+/* inventory turns (annualised) & days on hand, for the current view */
+function turnsInfo(rows){ const m=onHandMap(rows);let annualConsVal=0,stockVal=0;
+  Object.keys(m).forEach(k=>{annualConsVal+=avgCons(k)*(m[k].uv||0)*12;stockVal+=m[k].val;});
+  const turns=stockVal>0?annualConsVal/stockVal:0; return {turns,days:turns>0?365/turns:0,stockVal}; }
+const fmtNum=v=>v>=1e5?(v/1e5).toFixed(1)+"L":v>=1e3?(v/1e3).toFixed(1)+"k":Math.round(v).toString();
 
 /* theme colours for charts */
 function tk(){ return THEME==="dark"
@@ -249,6 +290,12 @@ const ALIASES={
   month:["month","period","snapshot month","period end","as on","as of date","date"],
   last_movement:["last movement date","last movement","last issue date","last issue","last goods movement","last moved","last txn date"]
 };
+/* consumption file columns */
+const ALIASES_CONS={
+  item_code:ALIASES.item_code, plant:ALIASES.plant, month:ALIASES.month,
+  qty_issued:["qty issued","quantity issued","issued","goods issued","goods issue","consumption","consumed","issue qty","issues","qty consumed","gi qty","gi quantity","total issued","issued qty"]
+};
+function pickColM(hs,map,f){const H=hs.map(norm);for(const a of map[f]){const i=H.indexOf(a);if(i>=0)return hs[i];}return null;}
 const norm=h=>(h==null?"":String(h).trim().toLowerCase().replace(/\s+/g," "));
 function pickCol(hs,f){const H=hs.map(norm);for(const a of ALIASES[f]){const i=H.indexOf(a);if(i>=0)return hs[i];}return null;}
 function toDate(v){if(v==null||v==="")return null;if(v instanceof Date)return v.toISOString().slice(0,10);
@@ -309,7 +356,10 @@ try{const t=localStorage.getItem("iq_theme");if(t)THEME=t;}catch(e){}
 async function loadData(){
   const {data,error}=await sb.from("inventory").select("*").order("value",{ascending:false}).limit(12000);
   if(error){$("#content").innerHTML=`<div class="empty"><div class="em">⚠️</div><h4>Could not load data</h4><div>${error.message}</div></div>`;return;}
-  ROWS=data||[];computeDerived();buildFilters();render();
+  ROWS=data||[];
+  // consumption table is optional — ignore the error if it doesn't exist yet
+  try{ const c=await sb.from("consumption").select("*").limit(20000); CONS=(c&&!c.error&&c.data)?c.data:[]; }catch(e){ CONS=[]; }
+  computeDerived();computeCons();buildFilters();render();
 }
 /* Derive each item's last-movement date from its monthly snapshots:
    the latest month in which its quantity changed = it moved then.
@@ -376,12 +426,18 @@ function vOverview(){
     ${kpi("k-amber",IC.list,"No. of Materials",inr(nItems),"distinct item-plant lines")}
     ${kpi("k-red",IC.warn,"Inventory Value at Risk",hasMove?rupee(riskV):"—",hasMove?`no movement > ${AGE_RISK}d · tap`:"import 2+ months to enable")}
     ${kpi("k-purple",IC.clock,"Slow / Non-moving",hasMove?rupee(slowV):"—",hasMove?`${inr(slowN)} items · tap`:"import 2+ months to enable")}</div>`;
-  const zeroN=rows.filter(r=>(+r.qty||0)<=0).length,noDateN=rows.filter(r=>!r.last_movement).length;
+  const zeroN=rows.filter(r=>(+r.qty||0)<=0).length;
+  const excV=hasCons()?excessValue(rows):null, soN=hasCons()?stockoutList(rows).filter(x=>x.cover<LEAD_DAYS).length:null;
+  const card4 = hasCons()
+    ? `<div class="act ${soN?'red':'grey'}" onclick="go('stockout')"><div class="big num">${inr(soN)}</div><div class="lb">Stock-out risk</div><div class="nt">cover < ${LEAD_DAYS} days · tap</div></div>`
+    : `<div class="act ${zeroN?'':'grey'}" onclick="go('details')"><div class="big num">${inr(zeroN)}</div><div class="lb">Zero / negative qty</div><div class="nt">review in Details</div></div>`;
+  const card3 = hasCons()
+    ? `<div class="act amber" onclick="go('ageing')"><div class="big num">${rupee(excV)}</div><div class="lb">Excess inventory</div><div class="nt">above ${EXCESS_MONTHS} months cover</div></div>`
+    : `<div class="act purple" onclick="go('ageing')"><div class="big num">${hasMove?rupee(deadV):"—"}</div><div class="lb">Dead stock</div><div class="nt">no movement > ${AGE_DEAD} days</div></div>`;
   const acts=`<div class="sechd">Action Centre — tap a card for the line items</div><div class="acts">
     <div class="act amber" onclick="go('ageing')"><div class="big num">${hasMove?rupee(slowV):"—"}</div><div class="lb">Slow-moving stock</div><div class="nt">no movement > ${AGE_SLOW} days</div></div>
     <div class="act red" onclick="go('ageing')"><div class="big num">${hasMove?rupee(riskV):"—"}</div><div class="lb">Toward obsolete</div><div class="nt">no movement > ${AGE_RISK} days</div></div>
-    <div class="act purple" onclick="go('ageing')"><div class="big num">${hasMove?rupee(deadV):"—"}</div><div class="lb">Dead stock</div><div class="nt">no movement > ${AGE_DEAD} days</div></div>
-    <div class="act ${zeroN?'':'grey'}" onclick="go('details')"><div class="big num">${inr(zeroN)}</div><div class="lb">Zero / negative qty</div><div class="nt">${noDateN?inr(noDateN)+" missing movement date":"review in Details"}</div></div></div>`;
+    ${card3}${card4}</div>`;
   const charts=`<div class="grid">
     <div class="card"><h3>Inventory Value by Plant</h3><div class="sub">₹ on hand, by location</div><div id="cPlant"></div></div>
     <div class="card"><h3>Inventory Value by Category</h3><div class="sub">share of total stock value</div><div id="cCat"></div></div></div>`;
@@ -444,15 +500,15 @@ function vStock(){
   const skus=new Set(rows.map(r=>r.item_code+"|"+r.plant)).size;
   const mom=momValue();
   const lk=(c,k,v,d)=>`<div class="kpi ${c}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
-  // stacked 12-month by category
   const ms=months(base());
+  const soN=hasCons()?stockoutList(rows).length:null, ti=hasCons()?turnsInfo(rows):null;
   $("#content").innerHTML=`
     <div class="kpis light">
       ${lk("",'Stock Value (on hand)',rupee(totV),mom==null?"this period":`${mom>=0?"▲":"▼"} ${Math.abs(mom).toFixed(1)}% vs last month`)}
       ${lk("b-green",'Active SKUs',inr(skus),"item-plant lines")}
-      ${lk("b-red",'Stock-out Risk',"—","needs consumption data")}
-      ${lk("b-amber",'Inventory Turns',"—","needs consumption data")}
-      ${lk("b-purple",'On Order (open PO)',"—","needs PO data")}
+      ${lk("b-red",'Stock-out Risk',soN==null?"—":inr(soN),soN==null?"needs consumption data":"items · before resupply")}
+      ${lk("b-amber",'Inventory Turns',ti==null?"—":ti.turns.toFixed(1)+"×",ti==null?"needs consumption data":Math.round(ti.days)+" days on hand")}
+      ${lk("b-purple",'On Order (open PO)',"—","Stage 2 · needs PO data")}
     </div>
     <div class="card"><h3>Stock Value by Category — by month</h3><div class="sub">₹ Cr stacked over time</div><div id="cStack"></div></div>
     <div class="card"><h3>On-hand by plant</h3><div class="sub">quantity & value per location</div>
@@ -533,19 +589,61 @@ function vABC(){
 
 /* -- Stock-out (reserved) -- */
 function vStockout(){
+  if(!hasCons()){$("#content").innerHTML=needs("consumption data","Stock-out risk compares how fast each item is used against what's on hand. Click <b>Import data</b>, choose <b>Consumption</b>, and upload your goods-issued file — then this page switches on. (Assumed reorder lead time: "+LEAD_DAYS+" days.)");return;}
+  const rows=current();
+  const risk=stockoutList(rows).filter(x=>x.cover<LEAD_DAYS);
+  const watch=stockoutList(rows).filter(x=>x.cover>=LEAD_DAYS&&x.cover<LEAD_DAYS*2);
+  const bars=stockoutList(rows).slice(0,14).map(x=>[x.desc||x.item,Math.round(x.cover),x.cover<LEAD_DAYS?"#d83a30":(x.cover<LEAD_DAYS*2?"#ea8c17":"#15a86f")]);
+  const lk=(c,k,v,d)=>`<div class="kpi ${c}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
   $("#content").innerHTML=`
-    <div class="card"><h3>Days of Cover vs Lead Time</h3><div class="sub">red = runs out before the next delivery</div>
-      <div class="empty" style="padding:26px"><div class="em">🔒</div><h4>Needs consumption & lead-time data</h4>
-      <div style="max-width:560px;margin:0 auto">Stock-out risk compares how fast each item is used against what's on hand and the reorder lead time. That consumption data isn't in the cloud app yet. When you're ready (Option B), we add a consumption upload and this page switches on — the layout is already reserved for it.</div></div></div>
-    <div class="card"><h3>At-risk Items</h3><div class="sub">reorder soon</div>
-      <div class="empty"><div>No consumption data loaded — nothing to flag yet.</div></div></div>`;
+    <div class="kpis light">
+      ${lk("b-red",'At-risk now',inr(risk.length),"cover < "+LEAD_DAYS+" days")}
+      ${lk("b-amber",'Watch',inr(watch.length),"cover < "+(LEAD_DAYS*2)+" days")}
+      ${lk("b-purple",'Assumed lead time',LEAD_DAYS+" d",'reorder wait (editable)')}
+      ${lk("b-green",'Items with cover',inr(onHandMapKeys(rows)),"tracked item-plant lines")}
+    </div>
+    <div class="card"><h3>Days of Cover (lowest first)</h3><div class="sub">red = runs out before the next delivery (&lt; ${LEAD_DAYS} days)</div><div id="cCover"></div></div>
+    <div class="card"><h3>At-risk Items — reorder soon</h3><div class="sub">on-hand ÷ average monthly use</div>
+      <div class="twrap"><table><thead><tr><th>Material</th><th>Plant</th><th class="r">On hand</th><th class="r">Avg/mo use</th><th class="r">Cover (days)</th><th>Status</th></tr></thead>
+      <tbody>${(risk.length?risk:watch).slice(0,200).map(x=>`<tr><td>${x.desc||x.item||""}</td><td>${x.plant||""}</td><td class="r num">${inr(x.qty)}</td><td class="r num">${inr(Math.round(x.avg))}</td><td class="r num">${Math.round(x.cover)}</td><td><span class="pill ${x.cover<LEAD_DAYS?'pC':'pB'}">${x.cover<LEAD_DAYS?'Reorder now':'Watch'}</span></td></tr>`).join("")||`<tr><td colspan="6" style="color:var(--ink3)">No items below cover — healthy. ✅</td></tr>`}</tbody></table></div>
+      <div class="cap">${inr(risk.length)} item(s) below ${LEAD_DAYS}-day cover.</div></div>`;
+  barsRawC("#cCover",bars);
 }
+function onHandMapKeys(rows){ return Object.keys(onHandMap(rows)).filter(k=>avgCons(k)>0).length; }
+function barsRawC(id,data){ drawBars(id,data.map(d=>[d[0],d[1]]),v=>v,v=>Math.round(v)+" days",v=>Math.round(v),null,data.map(d=>d[2])); }
 /* -- Forecast (reserved) -- */
+let FC_KEY="";
 function vForecast(){
+  if(!hasCons()){$("#content").innerHTML=needs("consumption history","Demand forecast projects future usage from past <b>consumption</b>. Click <b>Import data</b>, choose <b>Consumption</b>, and upload your goods-issued file (ideally several months) — then this page shows actual vs forecast per item.");return;}
+  // keys present in both consumption and current stock, ranked by avg use
+  const oh=onHandMap(current());
+  const keys=Object.keys(CONS_SERIES).filter(k=>avgCons(k)>0).sort((a,b)=>avgCons(b)-avgCons(a));
+  if(!keys.length){$("#content").innerHTML=needs("consumption history","No consumption rows found yet. Import a goods-issued file to see forecasts.");return;}
+  if(!keys.includes(FC_KEY))FC_KEY=keys[0];
+  const label=k=>{const o=oh[k];const parts=k.split("|");return (o&&o.desc?o.desc:parts[0])+" · "+(parts[1]||"");};
   $("#content").innerHTML=`
-    <div class="card"><h3>Predictive Demand Forecast</h3><div class="sub">projected consumption & cover</div>
-      <div class="empty" style="padding:30px"><div class="em">🔒</div><h4>Needs consumption history</h4>
-      <div style="max-width:560px;margin:0 auto">Demand forecast projects future usage from past <b>consumption</b>. Once consumption history is added to the cloud (Option B), this page shows actual vs forecast and months of cover per item — exactly like your desktop app. It's ready to switch on when you want it.</div></div></div>`;
+    <div class="card"><div class="chdr"><div><h3>Predictive Demand Forecast</h3><div class="sub">actual consumption & projected next ${FCAST_MONTHS} months</div></div>
+      <select class="inp" id="fcSel" style="max-width:340px">${keys.slice(0,400).map(k=>`<option value="${k}" ${k===FC_KEY?'selected':''}>${label(k)}</option>`).join("")}</select></div>
+      <div id="cFc"></div>
+      <div class="legend"><span><i style="background:#2563c9"></i>Actual consumption</span><span><i style="background:#e08a1e"></i>Forecast (next ${FCAST_MONTHS} mo)</span></div>
+      <div class="note" id="fcNote"></div></div>`;
+  $("#fcSel").onchange=e=>{FC_KEY=e.target.value;drawForecast(oh);};
+  drawForecast(oh);
+}
+function drawForecast(oh){
+  const ser=CONS_SERIES[FC_KEY]||{}, ms=Object.keys(ser).sort();
+  const fc=forecast(FC_KEY);
+  const labels=ms.map(m=>MLAB(m)).concat(Array.from({length:FCAST_MONTHS},(_,i)=>"+"+(i+1)));
+  const vals=ms.map(m=>ser[m]).concat(Array.from({length:FCAST_MONTHS},()=>Math.round(fc)));
+  const cols=ms.map(()=>"#2563c9").concat(Array.from({length:FCAST_MONTHS},()=>"#e08a1e"));
+  drawBars("#cFc",labels.map((l,i)=>[l,vals[i]]),v=>v,v=>Math.round(v),v=>fmtNum(v),null,cols);
+  const o=oh[FC_KEY]||{qty:0}; const monthsCover=fc>0?o.qty/fc:Infinity;
+  const name=(o.desc||FC_KEY.split("|")[0])+" at "+(FC_KEY.split("|")[1]||"—");
+  let verdict; if(!isFinite(monthsCover))verdict="no recent usage — review if still needed.";
+    else if(monthsCover>EXCESS_MONTHS)verdict=`about ${monthsCover.toFixed(1)} months of cover — heavily overstocked.`;
+    else if(monthsCover<1.5)verdict=`only ${monthsCover.toFixed(1)} months of cover — reorder soon.`;
+    else verdict=`about ${monthsCover.toFixed(1)} months of cover — healthy.`;
+  $("#fcNote").innerHTML=`<b>${name}:</b> on hand ${inr(o.qty)} · avg use ${inr(Math.round(avgCons(FC_KEY)))}/mo · forecast ${inr(Math.round(fc))}/mo → ${verdict}`;
 }
 
 /* -- Details -- */
@@ -660,7 +758,7 @@ window.addEventListener("resize",()=>{clearTimeout(window._rz);window._rz=setTim
 $("#importBtn").onclick=()=>{$("#impMsg").textContent="";$("#file").value="";$("#replace").checked=false;$("#scrim").classList.add("on");};
 $("#impCancel").onclick=()=>$("#scrim").classList.remove("on");
 $("#impGo").onclick=async()=>{
-  const f=$("#file").files[0],msg=$("#impMsg");
+  const f=$("#file").files[0],msg=$("#impMsg"),type=$("#impType").value;
   if(!f){msg.textContent="Please choose a file first.";return;}
   msg.textContent="Reading file…";
   try{
@@ -668,9 +766,33 @@ $("#impGo").onclick=async()=>{
     const ws=wb.Sheets[wb.SheetNames[0]];
     const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""}).filter(r=>r.some(c=>String(c).trim()!==""));
     if(arr.length<2){msg.textContent="No rows found in the file.";return;}
-    const headers=arr[0].map(String),col={};for(const k in ALIASES)col[k]=pickCol(headers,k);
+    const headers=arr[0].map(String);
+    const idx={};headers.forEach((h,i)=>idx[h]=i);
+
+    if(type==="consumption"){
+      const col={};for(const k in ALIASES_CONS)col[k]=pickColM(headers,ALIASES_CONS,k);
+      if(!col.item_code){msg.textContent="Couldn't find an item-code column (Material / Item Code).";return;}
+      if(!col.qty_issued){msg.textContent="Couldn't find a quantity-issued column (Qty Issued / Consumption / Goods Issued).";return;}
+      const get=(row,k)=>col[k]!=null?row[idx[col[k]]]:"";
+      const rows=[];
+      for(let i=1;i<arr.length;i++){const row=arr[i];const code=String(get(row,"item_code")??"").trim();
+        if(!code||code.toLowerCase().startsWith("example"))continue;
+        rows.push({month:toDate(get(row,"month")),item_code:code,
+          plant:String(get(row,"plant")??"").trim()||null,qty_issued:n2(get(row,"qty_issued"))});}
+      if(!rows.length){msg.textContent="No usable rows found.";return;}
+      msg.textContent=`Found ${rows.length} consumption rows. Saving…`;
+      if($("#replace").checked){const del=await sb.from("consumption").delete().neq("id",-1);if(del.error){msg.textContent="Could not clear old consumption: "+del.error.message;return;}}
+      for(let i=0;i<rows.length;i+=500){const {error}=await sb.from("consumption").insert(rows.slice(i,i+500));
+        if(error){msg.textContent=(/relation|does not exist|schema cache/i.test(error.message)?"Consumption table not found — run the new schema SQL in Supabase first.":"Save failed: "+error.message);return;}
+        msg.textContent=`Saving… ${Math.min(i+500,rows.length)}/${rows.length}`;}
+      msg.textContent=`Imported ${rows.length} consumption rows.`;await loadData();setTimeout(()=>$("#scrim").classList.remove("on"),700);
+      return;
+    }
+
+    // ---- stock ----
+    const col={};for(const k in ALIASES)col[k]=pickCol(headers,k);
     if(!col.item_code){msg.textContent="Couldn't find an item-code column (Material / Item Code / Part No).";return;}
-    const idx={};headers.forEach((h,i)=>idx[h]=i);const get=(row,k)=>col[k]!=null?row[idx[col[k]]]:"";
+    const get=(row,k)=>col[k]!=null?row[idx[col[k]]]:"";
     const rows=[];
     for(let i=1;i<arr.length;i++){const row=arr[i];const code=String(get(row,"item_code")??"").trim();
       if(!code||code.toLowerCase().startsWith("example"))continue;
