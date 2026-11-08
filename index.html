@@ -61,8 +61,18 @@ button{font:inherit;cursor:pointer}
 .hero .fl{display:flex;flex-direction:column;gap:4px}
 .hero .fl label{font-size:10px;font-weight:700;color:#bcd2f5;text-transform:uppercase;letter-spacing:.04em}
 .hero .fl select{padding:9px 10px;border:1px solid rgba(255,255,255,.3);border-radius:9px;font:inherit;background:#fff;color:#15233b;min-width:155px}
-.theme{width:40px;height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;align-self:flex-end}
+.themewrap{position:relative;align-self:flex-end}
+.theme{width:40px;height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center}
 .theme svg{width:20px;height:20px}
+.themepop{position:absolute;right:0;top:46px;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(10,20,40,.28);padding:10px;width:250px;display:none}
+.themepop.on{display:block}
+.themepop .ph{font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;padding:4px 6px 8px}
+.themepop .ti{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:10px;cursor:pointer;color:var(--ink)}
+.themepop .ti:hover{background:var(--soft)}
+.themepop .ti.on{background:var(--soft);outline:2px solid var(--blue);outline-offset:-2px}
+.themepop .sw{width:34px;height:22px;border-radius:7px;flex:none;border:1px solid rgba(0,0,0,.15);box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
+.themepop .tn{font-size:13px;font-weight:700}
+.themepop .td{font-size:10.5px;color:var(--ink3)}
 .content{padding:18px 22px;flex:1}
 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px}
 .kpi{border-radius:15px;padding:16px;color:#fff;box-shadow:var(--shadow);min-height:118px}
@@ -169,7 +179,7 @@ td.r{text-align:right}
       <div class="fl"><label>Plant</label><select id="fPlant"><option value="ALL">All plants</option></select></div>
       <div class="fl"><label>Material Category</label><select id="fCat"><option value="ALL">All categories</option></select></div>
       <div class="fl"><label>As on month</label><select id="fMonth"><option value="ALL">Latest</option></select></div>
-      <button class="theme" id="themeBtn" title="Toggle light / dark"></button>
+      <div class="themewrap"><button class="theme" id="themeBtn" title="Change theme"></button><div class="themepop" id="themePop"></div></div>
     </header>
     <div class="content" id="content"></div>
   </div>
@@ -206,7 +216,27 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 function clearAuthStorage(){ try{ for(const k of Object.keys(localStorage)){ if(k.indexOf("sb-")===0) localStorage.removeItem(k); } }catch(e){} }
 function withTimeout(p,ms){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]); }
 const $ = s => document.querySelector(s);
-let ROWS=[], CONS=[], POS=[], PRS=[], VIEW="overview", TREND_MODE="all", THEME="light";
+let ROWS=[], CONS=[], POS=[], PRS=[], VIEW="overview", TREND_MODE="all", THEMEKEY="ocean";
+/* ---- themes: pick in the header palette menu ---- */
+const THEMES={
+  ocean:{name:"Ocean (Light)",desc:"Your original light look",dark:false,sw:"linear-gradient(135deg,#12306e,#2f6bf0)",
+    v:{bg:"#eef2f8",card:"#ffffff",ink:"#15233b",ink2:"#55657f",ink3:"#8491a6",line:"#dde3ee",grid:"#e3e9f3",soft:"#f7f9fd",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}},
+  classicdark:{name:"Classic Dark",desc:"Your original dark look",dark:true,sw:"linear-gradient(135deg,#12306e,#141d33)",
+    v:{bg:"#0c1322",card:"#141d33",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#25304a",grid:"#25304a",soft:"#1a2438",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}},
+  midnight:{name:"Midnight",desc:"Sleek dark mode",dark:true,sw:"linear-gradient(135deg,#0e1b3a,#4f8cff)",
+    v:{bg:"#0b1120",card:"#141d33",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#25304a",grid:"#2a3550",soft:"#1a2438",blue:"#4f8cff",navy:"#0e1b3a",side:"#0b1222",side2:"#060b16"}},
+  emerald:{name:"Emerald",desc:"Fresh & confident green",dark:false,sw:"linear-gradient(135deg,#0b5c43,#0ea371)",
+    v:{bg:"#eef5f1",card:"#ffffff",ink:"#13241d",ink2:"#4a6258",ink3:"#7f968c",line:"#d6e6de",grid:"#dceae3",soft:"#f2f8f5",blue:"#0ea371",navy:"#0b5c43",side:"#0e2a22",side2:"#071a14"}},
+  sunset:{name:"Sunset",desc:"Warm & inviting",dark:false,sw:"linear-gradient(135deg,#b23a6a,#f2663c)",
+    v:{bg:"#fbf1ec",card:"#ffffff",ink:"#2a1b17",ink2:"#6a524a",ink3:"#9c8379",line:"#f0ddd3",grid:"#f3e4db",soft:"#fcf5f1",blue:"#f2663c",navy:"#b23a6a",side:"#241a24",side2:"#160f16"}},
+  royal:{name:"Royal",desc:"Premium purple",dark:false,sw:"linear-gradient(135deg,#3b1f8f,#7c54f2)",
+    v:{bg:"#f1f0fb",card:"#ffffff",ink:"#1d1833",ink2:"#564d73",ink3:"#8980a6",line:"#e2def2",grid:"#e7e3f5",soft:"#f6f4fd",blue:"#7c54f2",navy:"#3b1f8f",side:"#1c1636",side2:"#110c22"}},
+  graphite:{name:"Graphite",desc:"Minimal & professional",dark:false,sw:"linear-gradient(135deg,#334155,#64748b)",
+    v:{bg:"#f3f4f6",card:"#ffffff",ink:"#1b2230",ink2:"#59616e",ink3:"#8a909b",line:"#e1e4e9",grid:"#e8eaef",soft:"#f7f8fa",blue:"#3b82f6",navy:"#334155",side:"#1f242e",side2:"#141820"}},
+  aurora:{name:"Aurora",desc:"Vibrant teal dark",dark:true,sw:"linear-gradient(135deg,#0c3b54,#22d3b5)",
+    v:{bg:"#0c1524",card:"#122033",ink:"#e6f0f7",ink2:"#9fb5c8",ink3:"#7892a6",line:"#223349",grid:"#263a52",soft:"#152435",blue:"#22d3b5",navy:"#0c3b54",side:"#0a1b2a",side2:"#07131d"}}
+};
+const isDark=()=>!!(THEMES[THEMEKEY]&&THEMES[THEMEKEY].dark);
 const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
 const LEAD_DAYS=45;        // assumed reorder lead time (days) for stock-out risk
 const EXCESS_MONTHS=6;     // more than this many months of cover = excess stock
@@ -288,9 +318,7 @@ function transferSaves(){ const byItem={};
   return {count,val,list:list.sort((a,b)=>b.val-a.val)}; }
 
 /* theme colours for charts */
-function tk(){ return THEME==="dark"
-  ? {grid:"#25304a",txt:"#9fb0cc",strong:"#e8eefb"}
-  : {grid:"#e3e9f3",txt:"#55657f",strong:"#15233b"}; }
+function tk(){ const v=THEMES[THEMEKEY].v; return {grid:v.grid,txt:v.ink2,strong:v.ink}; }
 
 const IC={
   overview:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
@@ -309,7 +337,8 @@ const IC={
   warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 20h20z"/><line x1="12" y1="9" x2="12" y2="14"/></svg>',
   clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>',
-  moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
+  moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+  palette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-2 0-.5-.2-.95-.5-1.3-.3-.35-.5-.8-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4-4-6.7-9-6.7z"/><circle cx="7.5" cy="11" r="1.1" fill="currentColor"/><circle cx="12" cy="7.5" r="1.1" fill="currentColor"/><circle cx="16.5" cy="11" r="1.1" fill="currentColor"/></svg>'
 };
 const MENU=[
   ["overview","Overview","Stock position · movement · ageing · value"],
@@ -411,12 +440,23 @@ function go(v){VIEW=v;$("#nav").querySelectorAll("a").forEach(a=>a.classList.tog
   const m=MENU.find(x=>x[0]===v)||MENU[0];$("#pgTitle").textContent=m[1];$("#pgSub").textContent=m[2];render();}
 window.go=go;
 
-/* ===== THEME ===== */
-function applyTheme(){ document.documentElement.setAttribute("data-theme",THEME);
-  $("#themeBtn").innerHTML = THEME==="dark"?IC.sun:IC.moon; }
-$("#themeBtn").onclick=()=>{THEME=THEME==="dark"?"light":"dark";
-  try{localStorage.setItem("iq_theme",THEME);}catch(e){} applyTheme();render();};
-try{const t=localStorage.getItem("iq_theme");if(t)THEME=t;}catch(e){}
+/* ===== THEME PICKER ===== */
+function applyTheme(){
+  const t=THEMES[THEMEKEY]||THEMES.ocean, R=document.documentElement.style;
+  for(const k in t.v) R.setProperty("--"+k, t.v[k]);
+  document.documentElement.setAttribute("data-theme", t.dark?"dark":"light");
+  $("#themeBtn").innerHTML=IC.palette;
+  const pop=$("#themePop"); if(pop) pop.querySelectorAll(".ti").forEach(e=>e.classList.toggle("on",e.dataset.k===THEMEKEY));
+}
+function buildThemePop(){
+  const pop=$("#themePop"); if(!pop)return;
+  pop.innerHTML='<div class="ph">Choose a theme</div>'+Object.keys(THEMES).map(k=>{const t=THEMES[k];
+    return `<div class="ti ${k===THEMEKEY?'on':''}" data-k="${k}"><span class="sw" style="background:${t.sw}"></span><div><div class="tn">${t.name}</div><div class="td">${t.desc}</div></div></div>`;}).join("");
+  pop.querySelectorAll(".ti").forEach(e=>e.onclick=()=>{THEMEKEY=e.dataset.k;try{localStorage.setItem("iq_theme",THEMEKEY);}catch(x){}applyTheme();render();pop.classList.remove("on");});
+}
+$("#themeBtn").onclick=e=>{e.stopPropagation();const pop=$("#themePop");buildThemePop();pop.classList.toggle("on");};
+document.addEventListener("click",e=>{const w=document.querySelector(".themewrap");if(w&&!w.contains(e.target))$("#themePop").classList.remove("on");});
+try{let t=localStorage.getItem("iq_theme");if(t==="dark")t="classicdark";if(t==="light")t="ocean";if(t&&THEMES[t])THEMEKEY=t;}catch(e){}
 
 /* ===== DATA ===== */
 async function loadData(){
