@@ -196,7 +196,7 @@ td.r{text-align:right}
       <div class="fl"><label>Plant</label><select id="fPlant"><option value="ALL">All plants</option></select></div>
       <div class="fl"><label>Material Category</label><select id="fCat"><option value="ALL">All categories</option></select></div>
       <div class="fl"><label>As on month</label><select id="fMonth"><option value="ALL">Latest</option></select></div>
-      <div class="themewrap"><button class="theme" id="themeBtn" title="Change theme"></button><div class="themepop" id="themePop"></div></div>
+      <div class="themewrap"><button class="theme" id="themeBtn" title="Toggle light / dark"></button></div>
     </header>
     <div class="content" id="content"></div>
   </div>
@@ -245,22 +245,10 @@ let ROWS=[], CONS=[], POS=[], PRS=[], VIEW="overview", TREND_MODE="all", THEMEKE
 let ALIAS_FOR={}, MAPPINGS={};   // ALIAS_FOR filled after aliases defined; MAPPINGS = saved column mappings
 /* ---- themes: pick in the header palette menu ---- */
 const THEMES={
-  ocean:{name:"Ocean (Light)",desc:"Your original light look",dark:false,sw:"linear-gradient(135deg,#12306e,#2f6bf0)",
+  ocean:{name:"Light",dark:false,
     v:{bg:"#eef2f8",card:"#ffffff",ink:"#15233b",ink2:"#55657f",ink3:"#8491a6",line:"#dde3ee",grid:"#e3e9f3",soft:"#f7f9fd",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}},
-  classicdark:{name:"Classic Dark",desc:"Your original dark look",dark:true,sw:"linear-gradient(135deg,#12306e,#141d33)",
-    v:{bg:"#0c1322",card:"#141d33",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#25304a",grid:"#25304a",soft:"#1a2438",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}},
-  midnight:{name:"Midnight",desc:"Sleek dark mode",dark:true,sw:"linear-gradient(135deg,#0e1b3a,#4f8cff)",
-    v:{bg:"#0b1120",card:"#141d33",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#25304a",grid:"#2a3550",soft:"#1a2438",blue:"#4f8cff",navy:"#0e1b3a",side:"#0b1222",side2:"#060b16"}},
-  emerald:{name:"Emerald",desc:"Fresh & confident green",dark:false,sw:"linear-gradient(135deg,#0b5c43,#0ea371)",
-    v:{bg:"#eef5f1",card:"#ffffff",ink:"#13241d",ink2:"#4a6258",ink3:"#7f968c",line:"#d6e6de",grid:"#dceae3",soft:"#f2f8f5",blue:"#0ea371",navy:"#0b5c43",side:"#0e2a22",side2:"#071a14"}},
-  sunset:{name:"Sunset",desc:"Warm & inviting",dark:false,sw:"linear-gradient(135deg,#b23a6a,#f2663c)",
-    v:{bg:"#fbf1ec",card:"#ffffff",ink:"#2a1b17",ink2:"#6a524a",ink3:"#9c8379",line:"#f0ddd3",grid:"#f3e4db",soft:"#fcf5f1",blue:"#f2663c",navy:"#b23a6a",side:"#241a24",side2:"#160f16"}},
-  royal:{name:"Royal",desc:"Premium purple",dark:false,sw:"linear-gradient(135deg,#3b1f8f,#7c54f2)",
-    v:{bg:"#f1f0fb",card:"#ffffff",ink:"#1d1833",ink2:"#564d73",ink3:"#8980a6",line:"#e2def2",grid:"#e7e3f5",soft:"#f6f4fd",blue:"#7c54f2",navy:"#3b1f8f",side:"#1c1636",side2:"#110c22"}},
-  graphite:{name:"Graphite",desc:"Minimal & professional",dark:false,sw:"linear-gradient(135deg,#334155,#64748b)",
-    v:{bg:"#f3f4f6",card:"#ffffff",ink:"#1b2230",ink2:"#59616e",ink3:"#8a909b",line:"#e1e4e9",grid:"#e8eaef",soft:"#f7f8fa",blue:"#3b82f6",navy:"#334155",side:"#1f242e",side2:"#141820"}},
-  aurora:{name:"Aurora",desc:"Vibrant teal dark",dark:true,sw:"linear-gradient(135deg,#0c3b54,#22d3b5)",
-    v:{bg:"#0c1524",card:"#122033",ink:"#e6f0f7",ink2:"#9fb5c8",ink3:"#7892a6",line:"#223349",grid:"#263a52",soft:"#152435",blue:"#22d3b5",navy:"#0c3b54",side:"#0a1b2a",side2:"#07131d"}}
+  classicdark:{name:"Dark",dark:true,
+    v:{bg:"#0c1322",card:"#141d33",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#25304a",grid:"#25304a",soft:"#1a2438",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}}
 };
 const isDark=()=>!!(THEMES[THEMEKEY]&&THEMES[THEMEKEY].dark);
 const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
@@ -508,23 +496,17 @@ function go(v){VIEW=v;$("#nav").querySelectorAll("a").forEach(a=>a.classList.tog
   const m=MENU.find(x=>x[0]===v)||MENU[0];$("#pgTitle").textContent=m[1];$("#pgSub").textContent=m[2];render();}
 window.go=go;
 
-/* ===== THEME PICKER ===== */
+/* ===== LIGHT / DARK TOGGLE ===== */
 function applyTheme(){
   const t=THEMES[THEMEKEY]||THEMES.ocean, R=document.documentElement.style;
   for(const k in t.v) R.setProperty("--"+k, t.v[k]);
   document.documentElement.setAttribute("data-theme", t.dark?"dark":"light");
-  $("#themeBtn").innerHTML=IC.palette;
-  const pop=$("#themePop"); if(pop) pop.querySelectorAll(".ti").forEach(e=>e.classList.toggle("on",e.dataset.k===THEMEKEY));
+  $("#themeBtn").innerHTML = t.dark?IC.sun:IC.moon;
+  $("#themeBtn").title = t.dark?"Switch to light mode":"Switch to dark mode";
 }
-function buildThemePop(){
-  const pop=$("#themePop"); if(!pop)return;
-  pop.innerHTML='<div class="ph">Choose a theme</div>'+Object.keys(THEMES).map(k=>{const t=THEMES[k];
-    return `<div class="ti ${k===THEMEKEY?'on':''}" data-k="${k}"><span class="sw" style="background:${t.sw}"></span><div><div class="tn">${t.name}</div><div class="td">${t.desc}</div></div></div>`;}).join("");
-  pop.querySelectorAll(".ti").forEach(e=>e.onclick=()=>{THEMEKEY=e.dataset.k;try{localStorage.setItem("iq_theme",THEMEKEY);}catch(x){}applyTheme();render();pop.classList.remove("on");});
-}
-$("#themeBtn").onclick=e=>{e.stopPropagation();const pop=$("#themePop");buildThemePop();pop.classList.toggle("on");};
-document.addEventListener("click",e=>{const w=document.querySelector(".themewrap");if(w&&!w.contains(e.target))$("#themePop").classList.remove("on");});
-try{let t=localStorage.getItem("iq_theme");if(t==="dark")t="classicdark";if(t==="light")t="ocean";if(t&&THEMES[t])THEMEKEY=t;}catch(e){}
+$("#themeBtn").onclick=()=>{ THEMEKEY = isDark()?"ocean":"classicdark";
+  try{localStorage.setItem("iq_theme",THEMEKEY);}catch(e){} applyTheme(); render(); };
+try{let t=localStorage.getItem("iq_theme");if(t==="dark"||t==="midnight"||t==="aurora")t="classicdark";if(t==="light"||!THEMES[t])t="ocean";THEMEKEY=t;}catch(e){}
 
 /* ===== DATA ===== */
 async function loadData(){
