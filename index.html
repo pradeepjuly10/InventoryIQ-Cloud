@@ -345,6 +345,8 @@ const IC={
   forecast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15a4 4 0 0 1 4-4 5 5 0 0 1 9.6-1.5A3.5 3.5 0 1 1 18 18H7a4 4 0 0 1-4-3z"/></svg>',
   details:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/></svg>',
   procurement:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.2l2.3 12.5a1.5 1.5 0 0 0 1.5 1.2h8.8a1.5 1.5 0 0 0 1.5-1.2L21 7H6"/></svg>',
+  avgcons:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5"/><path d="M4 19h16"/><rect x="7" y="11" width="3" height="5"/><rect x="12" y="8" width="3" height="8"/><rect x="17" y="13" width="3" height="3"/></svg>',
+  pricetrend:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-5 4 3 7-8"/><path d="M16 7h4v4"/><path d="M6 5h3M6 5v3"/></svg>',
   rupee:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4h12M6 9h12M16 4c0 5-4 6-8 6l7 10"/></svg>',
   box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>',
   list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>',
@@ -360,9 +362,11 @@ const MENU=[
   ["ageing","Ageing & Slow-Moving","Where your inventory money is stuck"],
   ["stock","Stock Position","On-hand value, SKUs & 12-month trend"],
   ["trend","Inventory Trend","Value & quantity over time"],
+  ["pricetrend","Price Trend","Material price, month on month"],
   ["abc","Movement & ABC","What's turning, and what matters most"],
   ["stockout","Stock-out Risk","Items that run dry before resupply"],
   ["forecast","Demand Forecast","Predicted consumption & cover"],
+  ["avgcons","Avg Consumption","Average usage over 3 / 6 / 9 / 12 months"],
   ["procurement","Procurement","Open POs, problem POs & requests"],
   ["details","Inventory Details","Full material list & export"]
 ];
@@ -565,7 +569,7 @@ function momValue(){const bm={};base().forEach(r=>{if(r.month)bm[r.month]=(bm[r.
 /* ===== RENDER ===== */
 function render(){
   if(!ROWS.length){$("#content").innerHTML=`<div class="empty"><div class="em">📦</div><h4>No data yet</h4><div>Click <b>Import data</b> and upload a stock file (.xlsx / .csv).</div></div>`;return;}
-  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,abc:vABC,stockout:vStockout,forecast:vForecast,procurement:vProcurement,details:vDetails}[VIEW]||vOverview)();
+  ({overview:vOverview,value:vValue,ageing:vAgeing,stock:vStock,trend:vTrend,pricetrend:vPriceTrend,abc:vABC,stockout:vStockout,forecast:vForecast,avgcons:vAvgCons,procurement:vProcurement,details:vDetails}[VIEW]||vOverview)();
 }
 
 /* -- Overview -- */
@@ -809,6 +813,85 @@ function drawForecast(oh){
   $("#fcNote").innerHTML=`<b>${name}:</b> on hand ${inr(o.qty)} · avg use ${inr(Math.round(avgCons(FC_KEY)))}/mo · forecast ${inr(Math.round(fc))}/mo → ${verdict}`;
 }
 
+/* -- Avg Consumption (qty & value over 3/6/9/12 months) -- */
+let AC_MODE="qty";
+function acWindowAvg(key,n){ const ser=CONS_SERIES[key]||{}; const last=CONS_MONTHS.slice(-n);
+  if(!last.length)return 0; let s=0; last.forEach(m=>s+=(ser[m]||0)); return s/last.length; }
+function acUnitPrice(key){ return ITEM_UV[key]||0; }
+function acInScope(key){ const p=$("#fPlant").value,c=$("#fCat").value; const parts=key.split("|");
+  const item=parts[0], plant=parts.slice(1).join("|");
+  if(p!=="ALL" && plant!==p) return false;
+  if(c!=="ALL" && ITEM_CAT[item]!==c) return false; return true; }
+function acRows(){ const oh=onHandMap(current());
+  return Object.keys(CONS_SERIES).filter(acInScope).map(k=>{const pr=acUnitPrice(k),o=oh[k]||{};
+    const q3=acWindowAvg(k,3),q6=acWindowAvg(k,6),q9=acWindowAvg(k,9),q12=acWindowAvg(k,12);
+    return {key:k,item:k.split("|")[0],plant:k.split("|").slice(1).join("|"),desc:o.desc||"",price:pr,
+      q3,q6,q9,q12, v3:q3*pr,v6:q6*pr,v9:q9*pr,v12:q12*pr};})
+    .sort((a,b)=>b.v3-a.v3); }
+function vAvgCons(){
+  if(!hasCons()){$("#content").innerHTML=needs("consumption data","Average consumption is worked out from your <b>goods-issued</b> history. Click <b>Import data</b> → choose <b>Consumption</b> and upload a few months, then this page shows average usage over the last 3 / 6 / 9 / 12 months — by quantity and by value.");return;}
+  const rows=acRows();
+  const isV=AC_MODE==="val";
+  const cell=r=>isV?[rupee(r.v3),rupee(r.v6),rupee(r.v9),rupee(r.v12)]:[inr(Math.round(r.q3)),inr(Math.round(r.q6)),inr(Math.round(r.q9)),inr(Math.round(r.q12))];
+  $("#content").innerHTML=`<div class="card">
+    <div class="chdr"><div><h3>Average Consumption</h3><div class="sub">per-month average over the last 3 / 6 / 9 / 12 months · ${inr(rows.length)} items</div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="tabs" id="acTabs"><button data-m="qty" class="${AC_MODE==='qty'?'on':''}">Quantity</button><button data-m="val" class="${AC_MODE==='val'?'on':''}">Value (₹)</button></div>
+        <input class="inp" id="acQ" placeholder="Search…" style="min-width:160px">
+        <button class="exp" id="acExp">⭳ Export Excel</button></div></div>
+    <div class="twrap"><table><thead><tr><th>Item</th><th>Description</th><th>Plant</th>
+      <th class="r">Avg · 3M</th><th class="r">Avg · 6M</th><th class="r">Avg · 9M</th><th class="r">Avg · 12M</th></tr></thead>
+    <tbody id="acBody"></tbody></table></div><div class="cap" id="acCap"></div>
+    <div class="note">“Avg · 3M” = average monthly ${isV?'consumption value':'quantity issued'} over the most recent 3 months of data (likewise 6/9/12). Value = average quantity × the item's unit price.</div></div>`;
+  const draw=()=>{const q=norm($("#acQ").value);
+    const f=rows.filter(r=>!q||(`${r.item} ${r.desc} ${r.plant}`).toLowerCase().includes(q));
+    $("#acBody").innerHTML=f.slice(0,600).map(r=>{const c=cell(r);
+      return `<tr><td>${r.item}</td><td>${r.desc}</td><td>${r.plant}</td><td class="r num">${c[0]}</td><td class="r num">${c[1]}</td><td class="r num">${c[2]}</td><td class="r num">${c[3]}</td></tr>`;}).join("")
+      ||`<tr><td colspan="7" style="color:var(--ink3)">No items match.</td></tr>`;
+    $("#acCap").textContent=`Showing ${Math.min(f.length,600)} of ${inr(f.length)} items.`;};
+  $("#acTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{AC_MODE=b.dataset.m;vAvgCons();});
+  $("#acQ").addEventListener("input",draw);
+  $("#acExp").onclick=()=>{
+    const cols=["item_code","description","plant","unit_price","avg_qty_3m","avg_qty_6m","avg_qty_9m","avg_qty_12m","avg_value_3m","avg_value_6m","avg_value_9m","avg_value_12m"];
+    const esc=c=>{c=(c==null?"":String(c));return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;};
+    const body=rows.map(r=>[r.item,r.desc,r.plant,Math.round(r.price),Math.round(r.q3),Math.round(r.q6),Math.round(r.q9),Math.round(r.q12),Math.round(r.v3),Math.round(r.v6),Math.round(r.v9),Math.round(r.v12)].map(esc).join(","));
+    const csv=[cols.join(",")].concat(body).join("\n");const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="avg_consumption.csv";document.body.appendChild(a);a.click();a.remove();};
+  draw();
+}
+
+/* -- Price Trend (unit price month on month) -- */
+let PT_KEY="";
+function priceMap(){ const m={}; base().forEach(r=>{ if(!r.month)return; const k=(r.item_code||"")+"|"+(r.plant||"");
+    const p=+r.unit_value||((+r.qty)?(+r.value||0)/(+r.qty):0); if(p>0){(m[k]=m[k]||{})[r.month]=p;} }); return m; }
+function vPriceTrend(){
+  const PM=priceMap(); const keys=Object.keys(PM).filter(k=>Object.keys(PM[k]).length>=2);
+  if(!keys.length){$("#content").innerHTML=needs("two or more months of stock","Price-trend compares each material's <b>unit price</b> across months. Import at least two months of stock files (with a value or unit-price column) and this page shows the month-on-month price for any material, plus the biggest movers.");return;}
+  // latest value to rank the selector
+  const oh=onHandMap(current());
+  keys.sort((a,b)=>((oh[b]&&oh[b].val)||0)-((oh[a]&&oh[a].val)||0));
+  if(!keys.includes(PT_KEY))PT_KEY=keys[0];
+  const label=k=>{const o=oh[k]||{};const parts=k.split("|");return (o.desc||parts[0])+" · "+parts.slice(1).join("|");};
+  // movers: latest vs earliest % change
+  const movers=keys.map(k=>{const ms=Object.keys(PM[k]).sort();const e=PM[k][ms[0]],l=PM[k][ms[ms.length-1]];
+    return {key:k,first:e,last:l,chg:e?(l-e)/e*100:0};}).sort((a,b)=>Math.abs(b.chg)-Math.abs(a.chg));
+  $("#content").innerHTML=`
+    <div class="card"><div class="chdr"><div><h3>Material Price — month on month</h3><div class="sub">unit price per month for the selected material</div></div>
+      <select class="inp" id="ptSel" style="max-width:360px">${keys.slice(0,500).map(k=>`<option value="${htmlesc(k)}" ${k===PT_KEY?'selected':''}>${htmlesc(label(k))}</option>`).join("")}</select></div>
+      <div id="cPrice"></div>
+      <div class="twrap" style="margin-top:12px;max-height:40vh"><table><thead><tr><th>Month</th><th class="r">Unit Price (₹)</th><th class="r">Change</th></tr></thead><tbody id="ptBody"></tbody></table></div></div>
+    <div class="card"><h3>Biggest price movers</h3><div class="sub">latest month vs earliest month · ${inr(movers.length)} materials tracked</div>
+      <div class="twrap"><table><thead><tr><th>Material</th><th>Plant</th><th class="r">First (₹)</th><th class="r">Latest (₹)</th><th class="r">Change</th></tr></thead>
+      <tbody>${movers.slice(0,40).map(m=>{const o=oh[m.key]||{};const up=m.chg>=0;return `<tr><td>${o.desc||m.key.split("|")[0]}</td><td>${m.key.split("|").slice(1).join("|")}</td><td class="r num">${inr(Math.round(m.first))}</td><td class="r num">${inr(Math.round(m.last))}</td><td class="r num" style="color:${up?'var(--red)':'var(--green)'}">${up?'▲':'▼'} ${Math.abs(m.chg).toFixed(1)}%</td></tr>`;}).join("")}</tbody></table></div>
+      <div class="note">Rising prices are shown in red (cost going up), falling prices in green.</div></div>`;
+  const drawPrice=()=>{const ser=PM[PT_KEY]||{},ms=Object.keys(ser).sort();
+    lineRaw("#cPrice",ms.map(MLAB),ms.map(m=>ser[m]),v=>"₹"+inr(v));
+    $("#ptBody").innerHTML=ms.map((m,i)=>{const p=ser[m],pp=i?ser[ms[i-1]]:0,ch=i&&pp?((p-pp)/pp*100):null;
+      return `<tr><td>${MLAB(m)}</td><td class="r num">${inr(Math.round(p))}</td><td class="r num">${ch==null?"—":(ch>=0?"+":"")+ch.toFixed(1)+"%"}</td></tr>`;}).join("");};
+  $("#ptSel").onchange=e=>{PT_KEY=e.target.value;drawPrice();};
+  drawPrice();
+}
+
 /* -- Procurement -- */
 function vProcurement(){
   if(!hasPO()&&!hasPR()){$("#content").innerHTML=needs("purchase-order / request data","This page shows open <b>purchase orders</b>, overdue or over-ordered POs, and <b>redundant purchase requests</b> (buying what you already have). Click <b>Import data</b>, choose <b>Purchase Orders</b> or <b>Purchase Requests</b>, and upload your file — then this page switches on.");return;}
@@ -947,6 +1030,23 @@ function multiLine(id,labels,series){
     lg+=`<span><i style="background:${col}"></i>${se.name}</span>`;});
   labels.forEach((l,i)=>{s+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="${T.txt}">${l}</text>`;});
   host.innerHTML=s+"</svg>"+`<div class="legend">${lg}</div>`;
+}
+function lineRaw(id,labels,vals,fmt){
+  const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
+  if(!vals.length){host.innerHTML='<div class="cap">No data.</div>';return;}
+  const mx=Math.max(...vals),mn=Math.min(...vals,mx*0.9);
+  const W=Math.max(360,host.clientWidth||760),H=300,L=64,R=16,B=40,Tp=20,n=labels.length;
+  const X=i=>L+(W-L-R)*(n<2?0.5:i/(n-1)), Y=v=>Tp+(H-Tp-B)*(1-(v-mn)/((mx-mn)||1));
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+  for(let i=0;i<=4;i++){const y=Tp+(H-Tp-B)*i/4,val=mx-(mx-mn)*i/4;
+    s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${T.grid}"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="10" fill="${T.txt}">${fmt(val)}</text>`;}
+  let pts=vals.map((v,i)=>`${X(i)},${Y(v)}`).join(" ");
+  s+=`<polyline points="${pts}" fill="none" stroke="#2f6bf0" stroke-width="2.5"/>`;
+  s+=`<polygon points="${L},${H-B} ${pts} ${X(n-1)},${H-B}" fill="#2f6bf0" opacity="0.08"/>`;
+  vals.forEach((v,i)=>{s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="#2f6bf0"><title>${labels[i]}: ${fmt(v)}</title></circle>`;
+    s+=`<text x="${X(i)}" y="${Y(v)-9}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${T.strong}">${fmt(v)}</text>`;
+    s+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" font-size="11" fill="${T.txt}">${labels[i]}</text>`;});
+  host.innerHTML=s+"</svg>";
 }
 function stacked(id,ms){
   const host=$(id);if(!host)return;host.innerHTML="";const T=tk();
