@@ -241,14 +241,14 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 function clearAuthStorage(){ try{ for(const k of Object.keys(localStorage)){ if(k.indexOf("sb-")===0) localStorage.removeItem(k); } }catch(e){} }
 function withTimeout(p,ms){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]); }
 const $ = s => document.querySelector(s);
-let ROWS=[], CONS=[], POS=[], PRS=[], VIEW="overview", TREND_MODE="all", THEMEKEY="ocean";
+let ROWS=[], CONS=[], POS=[], PRS=[], VIEW="overview", TREND_MODE="all", THEMEKEY="classicdark";
 let ALIAS_FOR={}, MAPPINGS={};   // ALIAS_FOR filled after aliases defined; MAPPINGS = saved column mappings
 /* ---- themes: pick in the header palette menu ---- */
 const THEMES={
   ocean:{name:"Light",dark:false,
     v:{bg:"#eef2f8",card:"#ffffff",ink:"#15233b",ink2:"#55657f",ink3:"#8491a6",line:"#dde3ee",grid:"#e3e9f3",soft:"#f7f9fd",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}},
   classicdark:{name:"Dark",dark:true,
-    v:{bg:"#0c1322",card:"#141d33",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#25304a",grid:"#25304a",soft:"#1a2438",blue:"#2f6bf0",navy:"#12306e",side:"#121a2e",side2:"#0d1424"}}
+    v:{bg:"#0e1626",card:"#172039",ink:"#e8eefb",ink2:"#a7b6d2",ink3:"#7e8ea8",line:"#27324d",grid:"#27324d",soft:"#1a2440",blue:"#2f6bf0",navy:"#12306e",side:"#0a0f1c",side2:"#060b16"}}
 };
 const isDark=()=>!!(THEMES[THEMEKEY]&&THEMES[THEMEKEY].dark);
 const AGE_SLOW=90, AGE_RISK=180, AGE_DEAD=365;
@@ -506,7 +506,7 @@ function applyTheme(){
 }
 $("#themeBtn").onclick=()=>{ THEMEKEY = isDark()?"ocean":"classicdark";
   try{localStorage.setItem("iq_theme",THEMEKEY);}catch(e){} applyTheme(); render(); };
-try{let t=localStorage.getItem("iq_theme");if(t==="dark"||t==="midnight"||t==="aurora")t="classicdark";if(t==="light"||!THEMES[t])t="ocean";THEMEKEY=t;}catch(e){}
+try{let t=localStorage.getItem("iq_theme");if(t==="dark"||t==="midnight"||t==="aurora")t="classicdark";if(t==="light")t="ocean";if(t&&THEMES[t])THEMEKEY=t;}catch(e){}
 
 /* ===== DATA ===== */
 async function loadData(){
