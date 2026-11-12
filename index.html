@@ -262,11 +262,16 @@ const EXCESS_MONTHS=6;     // more than this many months of cover = excess stock
 const FCAST_MONTHS=3;      // how many months ahead the forecast projects
 const DAY=86400000;
 /* consumption maps, rebuilt on load */
-let CONS_AVG={}, CONS_SERIES={}, CONS_MONTHS=[];
+let CONS_AVG={}, CONS_SERIES={}, CONS_VAL={}, CONS_PRICE={}, CONS_MONTHS=[];
+/* NOTE: run AFTER computeMeta() so ITEM_UV (stock price) is available as fallback. */
 function computeCons(){
-  CONS_AVG={};CONS_SERIES={};const mset={};
-  CONS.forEach(c=>{const k=(c.item_code||"")+"|"+(c.plant||"");(CONS_SERIES[k]=CONS_SERIES[k]||{});
-    if(c.month){CONS_SERIES[k][c.month]=(CONS_SERIES[k][c.month]||0)+(+c.qty_issued||0);mset[c.month]=1;}});
+  CONS_AVG={};CONS_SERIES={};CONS_VAL={};CONS_PRICE={};const mset={};
+  CONS.forEach(c=>{const k=(c.item_code||"")+"|"+(c.plant||"");
+    (CONS_SERIES[k]=CONS_SERIES[k]||{});(CONS_VAL[k]=CONS_VAL[k]||{});
+    if(+c.unit_value>0) CONS_PRICE[k]=+c.unit_value;                 // issue rate from the file
+    if(c.month){const q=+c.qty_issued||0; const rate=(+c.unit_value>0?+c.unit_value:(ITEM_UV[k]||0));
+      CONS_SERIES[k][c.month]=(CONS_SERIES[k][c.month]||0)+q;
+      CONS_VAL[k][c.month]=(CONS_VAL[k][c.month]||0)+q*rate; mset[c.month]=1;}});
   CONS_MONTHS=Object.keys(mset).sort();
   Object.keys(CONS_SERIES).forEach(k=>{const vals=Object.values(CONS_SERIES[k]);
     CONS_AVG[k]=vals.length?vals.reduce((s,v)=>s+v,0)/vals.length:0;});
@@ -389,7 +394,8 @@ const ALIASES={
 /* consumption file columns */
 const ALIASES_CONS={
   item_code:ALIASES.item_code, plant:ALIASES.plant, month:ALIASES.month,
-  qty_issued:["qty issued","quantity issued","issued","goods issued","goods issue","consumption","consumed","issue qty","issues","qty consumed","gi qty","gi quantity","total issued","issued qty"]
+  qty_issued:["qty issued","quantity issued","issued","goods issued","goods issue","consumption","consumed","issue qty","issues","qty consumed","gi qty","gi quantity","total issued","issued qty"],
+  unit_value:["unit price","rate","issue rate","unit value","unit cost","moving avg price","map","valuation price","price","unit rate","issue price"]
 };
 function pickColM(hs,map,f){if(!map[f])return null;const H=hs.map(norm);for(const a of map[f]){const i=H.indexOf(a);if(i>=0)return hs[i];}return null;}
 /* purchase order / request columns */
@@ -419,7 +425,7 @@ async function saveMapping(type,map){ MAPPINGS[type]=map;
 /* standard fields per data type, for the mapping table (label, required) */
 const FIELDS={
   stock:[["item_code","Item / Material code",true],["description","Description",false],["plant","Plant / Location",false],["category","Category / Group",false],["qty","Stock Quantity",true],["value","Stock Value (₹)",false],["unit_value","Unit Price",false],["month","Month / Period",false],["last_movement","Last Movement Date",false]],
-  consumption:[["item_code","Item / Material code",true],["plant","Plant / Location",false],["month","Month / Period",false],["qty_issued","Quantity Issued / Consumed",true]],
+  consumption:[["item_code","Item / Material code",true],["plant","Plant / Location",false],["month","Month / Period",false],["qty_issued","Quantity Issued / Consumed",true],["unit_value","Unit Price / Rate (optional)",false]],
   po:[["item_code","Item / Material code",true],["plant","Plant",false],["po_no","PO Number",false],["po_qty","PO Quantity",false],["order_date","Order Date",false],["expected_date","Expected Date",false],["status","Status",false],["value","PO Value (₹)",false]],
   pr:[["item_code","Item / Material code",true],["plant","Plant",false],["pr_no","PR Number",false],["pr_qty","PR Quantity",false],["pr_date","PR Date",false],["status","Status",false]]
 };
@@ -462,7 +468,7 @@ async function initAuth(){
 /* ===== PUBLIC DEMO (sample data, read-only) ===== */
 let DEMO=false;
 function makeDemoData(){
-  const PLANTS=["DemoCo Kandla MFG","DemoCo Rourkela MFG-2","DemoCo Durgapur"];
+  const PLANTS=["Acme North","Acme South","Acme East"];
   const CATS=["CONCAST REFRACTORY","PCPF & PP","SLIDE GATE REFRACTOR","ZIRCONIA"];
   const NAMES=["Fired Product (CCR-MBS)","Machined Product (CCR-LSM)","DIP Glaze (CCR-SEN)","Mono Block Stopper","Well Block (WB)","Housing (HB)","Slide Plate","Ladle Nozzle","Ladle Shroud","Tundish Board","Castable Mix","High-Alumina Mortar","Zirconia Brick","Purging Plug"];
   const now=new Date(), months=[];
@@ -478,7 +484,7 @@ function makeDemoData(){
       uv=Math.max(80, uv+Math.round((Math.random()-0.45)*uv*0.05));  // gentle price drift
       if(mi<=freeze) qty=Math.max(0, qty-Math.round(use*(0.5+Math.random()))+(Math.random()<0.5?Math.round(use*2):0));
       inv.push({id:id++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),description:nm,plant:p,category:cat,qty:qty,unit_value:uv,value:Math.round(qty*uv),last_movement:null});
-      cons.push({id:cid++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,qty_issued:(mi<=freeze?Math.round(use*(0.5+Math.random())):Math.round(use*0.1))});
+      cons.push({id:cid++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,qty_issued:(mi<=freeze?Math.round(use*(0.5+Math.random())):Math.round(use*0.1)),unit_value:uv});
     });
     if(k%3===0) pos.push({id:pid++,po_no:"PO-"+(5000+pid),item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,po_qty:Math.round(use*4),order_date:months[2],expected_date:(k%2?months[5]:new Date(now.getFullYear(),now.getMonth()+3,15).toISOString().slice(0,10)),status:"Open",value:Math.round(use*4*uv)});
     if(k%4===0) prs.push({id:rid++,pr_no:"PR-"+(9000+rid),item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,pr_qty:Math.round(use*2),pr_date:months[7],status:"Open"});
@@ -488,7 +494,7 @@ function makeDemoData(){
 function enterDemo(){
   DEMO=true; const d=makeDemoData();
   ROWS=d.inv; CONS=d.cons; POS=d.pos; PRS=d.prs;
-  computeDerived(); computeCons(); computeMeta();
+  computeDerived(); computeMeta(); computeCons();
   $("#login").style.display="none"; $("#app").classList.add("on"); document.body.classList.add("demo");
   $("#who").textContent="Demo • sample data"; buildNav(); applyTheme();
   $("#importBtn").style.display="none"; $("#refreshBtn").style.display="none"; $("#logoutBtn").textContent="Exit demo";
@@ -566,7 +572,7 @@ async function loadData(){
   try{ const p=await sb.from("purchase_orders").select("*").limit(20000); POS=(p&&!p.error&&p.data)?p.data:[]; }catch(e){ POS=[]; }
   try{ const q=await sb.from("purchase_requests").select("*").limit(20000); PRS=(q&&!q.error&&q.data)?q.data:[]; }catch(e){ PRS=[]; }
   try{ const st=await sb.from("settings").select("*"); if(st&&!st.error&&st.data) st.data.forEach(r=>{ if(r.key&&r.key.indexOf("colmap_")===0) MAPPINGS[r.key.slice(7)]=r.data; }); }catch(e){}
-  computeDerived();computeCons();computeMeta();buildFilters();render();
+  computeDerived();computeMeta();computeCons();buildFilters();render();
 }
 /* Derive each item's last-movement date from its monthly snapshots:
    the latest month in which its quantity changed = it moved then.
@@ -861,7 +867,9 @@ function drawForecast(oh){
 let AC_MODE="qty";
 function acWindowAvg(key,n){ const ser=CONS_SERIES[key]||{}; const last=CONS_MONTHS.slice(-n);
   if(!last.length)return 0; let s=0; last.forEach(m=>s+=(ser[m]||0)); return s/last.length; }
-function acUnitPrice(key){ return ITEM_UV[key]||0; }
+function acWindowAvgVal(key,n){ const ser=CONS_VAL[key]||{}; const last=CONS_MONTHS.slice(-n);
+  if(!last.length)return 0; let s=0; last.forEach(m=>s+=(ser[m]||0)); return s/last.length; }
+function acUnitPrice(key){ return CONS_PRICE[key]||ITEM_UV[key]||0; }
 function acInScope(key){ const p=$("#fPlant").value,c=$("#fCat").value; const parts=key.split("|");
   const item=parts[0], plant=parts.slice(1).join("|");
   if(p!=="ALL" && plant!==p) return false;
@@ -870,7 +878,7 @@ function acRows(){ const oh=onHandMap(current());
   return Object.keys(CONS_SERIES).filter(acInScope).map(k=>{const pr=acUnitPrice(k),o=oh[k]||{};
     const q3=acWindowAvg(k,3),q6=acWindowAvg(k,6),q9=acWindowAvg(k,9),q12=acWindowAvg(k,12);
     return {key:k,item:k.split("|")[0],plant:k.split("|").slice(1).join("|"),desc:o.desc||"",price:pr,
-      q3,q6,q9,q12, v3:q3*pr,v6:q6*pr,v9:q9*pr,v12:q12*pr};})
+      q3,q6,q9,q12, v3:acWindowAvgVal(k,3),v6:acWindowAvgVal(k,6),v9:acWindowAvgVal(k,9),v12:acWindowAvgVal(k,12)};})
     .sort((a,b)=>b.v3-a.v3); }
 function vAvgCons(){
   if(!hasCons()){$("#content").innerHTML=needs("consumption data","Average consumption is worked out from your <b>goods-issued</b> history. Click <b>Import data</b> → choose <b>Consumption</b> and upload a few months, then this page shows average usage over the last 3 / 6 / 9 / 12 months — by quantity and by value.");return;}
@@ -1158,8 +1166,9 @@ async function runImport(type,arr,headers,col,replace,remember){
       rows.push({month:toDate(get(row,"month")),item_code:code,description:String(get(row,"description")??"").trim(),
         plant:String(get(row,"plant")??"").trim()||null,category:String(get(row,"category")??"").trim()||null,
         qty:qty,unit_value:uv,value:val,last_movement:toDate(get(row,"last_movement"))});}
-    else if(type==="consumption"){rows.push({month:toDate(get(row,"month")),item_code:code,
-        plant:String(get(row,"plant")??"").trim()||null,qty_issued:n2(get(row,"qty_issued"))});}
+    else if(type==="consumption"){const cr={month:toDate(get(row,"month")),item_code:code,
+        plant:String(get(row,"plant")??"").trim()||null,qty_issued:n2(get(row,"qty_issued"))};
+        const crate=n2(get(row,"unit_value")); if(crate>0)cr.unit_value=crate; rows.push(cr);}
     else if(type==="po"){rows.push({po_no:String(get(row,"po_no")??"").trim()||null,item_code:code,
         plant:String(get(row,"plant")??"").trim()||null,po_qty:n2(get(row,"po_qty")),
         order_date:toDate(get(row,"order_date")),expected_date:toDate(get(row,"expected_date")),
