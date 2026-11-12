@@ -159,7 +159,19 @@ td.r{text-align:right}
     <label>Email</label><input id="email" type="email" autocomplete="username" required>
     <label>Password</label><input id="password" type="password" autocomplete="current-password" required>
     <button type="submit" id="loginBtn">Sign in</button>
+    <div style="text-align:center;margin-top:12px"><a href="#" id="forgotLink" style="font-size:12px;color:#2f6bf0;text-decoration:none;font-weight:600">Forgot password?</a></div>
     <div class="msg" id="loginMsg"></div>
+  </form>
+  <form class="lcard" id="resetForm" style="display:none">
+    <div class="lbrand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><rect x="9" y="13" width="6" height="7"/></svg></div>
+      <div><div class="t1">Inventory<span>IQ</span></div><div class="t2">AI inventory intelligence</div></div>
+    </div>
+    <p>Set a new password for your account.</p>
+    <label>New password</label><input id="newPass" type="password" autocomplete="new-password" required>
+    <label>Confirm new password</label><input id="newPass2" type="password" autocomplete="new-password" required>
+    <button type="submit">Update password</button>
+    <div class="msg" id="resetMsg"></div>
   </form>
 </div>
 
@@ -221,7 +233,7 @@ const SUPABASE_URL  = "https://otivfbrxclvwofbcymay.supabase.co";
 const SUPABASE_ANON = "sb_publishable_zlPF5ZdyS3CggHIFdc4eZQ_yVTrU7s9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth:{
-    persistSession:true, autoRefreshToken:true, detectSessionInUrl:false,
+    persistSession:true, autoRefreshToken:true, detectSessionInUrl:true,
     // pass-through lock: stops sign-in from waiting on a lock held by another/old tab
     lock:(name,acquireTimeout,fn)=>fn()
   }
@@ -432,9 +444,11 @@ const MLAB=d=>{const[y,m]=d.split("-");return ["Jan","Feb","Mar","Apr","May","Ju
    You stay logged in until you click Sign out. Token auto-refreshes (which fire
    every few seconds / on idle) NO LONGER re-check or clear the session, so the
    screen never bounces back to login on its own. */
-let AUTHED=false;
-function showLogin(){ $("#login").style.display="grid"; $("#app").classList.remove("on"); }
+let AUTHED=false, RECOVERY=false;
+function showLogin(){ $("#login").style.display="grid"; $("#app").classList.remove("on"); $("#loginForm").style.display=""; $("#resetForm").style.display="none"; }
+function showReset(){ RECOVERY=true; $("#login").style.display="grid"; $("#app").classList.remove("on"); $("#loginForm").style.display="none"; $("#resetForm").style.display=""; $("#resetMsg").textContent=""; }
 function showApp(session){
+  if(RECOVERY)return;                    // stay on the reset screen until the password is set
   AUTHED=true;
   $("#login").style.display="none"; $("#app").classList.add("on");
   $("#who").textContent=session.user.email; buildNav(); applyTheme();
@@ -442,9 +456,34 @@ function showApp(session){
   loadData();
 }
 async function initAuth(){
+  // arriving from a password-reset email?  show the "set new password" screen
+  if(/type=recovery/.test(location.hash||"")){ showReset(); return; }
   try{ const {data}=await sb.auth.getSession(); if(data&&data.session) showApp(data.session); else showLogin(); }
   catch(e){ showLogin(); }
 }
+/* Forgot password → email a reset link */
+$("#forgotLink").onclick=async e=>{
+  e.preventDefault();const msg=$("#loginMsg");const email=$("#email").value.trim();
+  if(!email){msg.className="msg err";msg.textContent="Type your email above first, then click Forgot password.";return;}
+  msg.className="msg";msg.textContent="Sending reset link…";
+  try{ const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin});
+    if(error){msg.className="msg err";msg.textContent=error.message;}
+    else{msg.className="msg ok";msg.textContent="Check your email for a password-reset link.";}
+  }catch(err){msg.className="msg err";msg.textContent="Could not send: "+err.message;}
+};
+/* Set the new password after clicking the email link */
+$("#resetForm").addEventListener("submit",async e=>{
+  e.preventDefault();const msg=$("#resetMsg");const p1=$("#newPass").value,p2=$("#newPass2").value;
+  if(p1.length<6){msg.className="msg err";msg.textContent="Password must be at least 6 characters.";return;}
+  if(p1!==p2){msg.className="msg err";msg.textContent="The two passwords don't match.";return;}
+  msg.className="msg";msg.textContent="Updating…";
+  try{ const {error}=await sb.auth.updateUser({password:p1});
+    if(error){msg.className="msg err";msg.textContent=error.message;return;}
+    msg.className="msg ok";msg.textContent="Password updated! Signing you in…";
+    RECOVERY=false; try{history.replaceState(null,"",location.pathname);}catch(x){}
+    const {data}=await sb.auth.getSession(); if(data&&data.session) showApp(data.session); else showLogin();
+  }catch(err){msg.className="msg err";msg.textContent="Error: "+err.message;}
+});
 $("#loginForm").addEventListener("submit",async e=>{
   e.preventDefault();const msg=$("#loginMsg");msg.className="msg";msg.textContent="Signing in…";
   const creds={email:$("#email").value.trim(),password:$("#password").value};
@@ -1066,7 +1105,8 @@ $("#exportBtn").onclick=()=>exportCSV(current());
 
 /* ===== start ===== */
 sb.auth.onAuthStateChange((event,session)=>{
-  if(session){ if(!AUTHED) showApp(session); }          // just signed in → show app once
+  if(event==="PASSWORD_RECOVERY"){ showReset(); return; }      // from the reset email link
+  if(session){ if(!AUTHED && !RECOVERY) showApp(session); }    // just signed in → show app once
   else if(event==="SIGNED_OUT"){ AUTHED=false; showLogin(); }  // only an explicit sign-out logs out
   // TOKEN_REFRESHED / other events with a live session are ignored — no re-check, no bounce
 });
