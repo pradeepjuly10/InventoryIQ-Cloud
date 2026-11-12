@@ -17,8 +17,9 @@
   --bg:#0c1322;--card:#141d33;--ink:#e8eefb;--ink2:#a7b6d2;--ink3:#7e8ea8;--line:#25304a;--grid:#25304a;--soft:#1a2438;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.35)}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;max-width:100%;overflow-x:hidden}
 body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:13px}
+*{box-sizing:border-box}
 .num{font-variant-numeric:tabular-nums}
 button{font:inherit;cursor:pointer}
 /* login */
@@ -146,7 +147,26 @@ td.r{text-align:right}
 .dlg .actions .go{background:var(--blue);color:#fff;border:none}
 .exp{background:var(--green);color:#fff;border:none;border-radius:9px;padding:9px 13px;font-weight:700;display:inline-flex;gap:7px;align-items:center}
 @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.acts{grid-template-columns:repeat(2,1fr)}.grid,.grid.eq{grid-template-columns:1fr}}
-@media(max-width:720px){#app.on{grid-template-columns:1fr}.side{position:static;height:auto;min-height:0;overflow:visible}.nav{flex-direction:row;overflow-x:auto}.nav a{white-space:nowrap}.sidefoot{margin-top:0}.kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){
+  #app.on{grid-template-columns:1fr}
+  #app.on>*{min-width:0}
+  .side{position:static;height:auto;min-height:0;width:100%;max-width:100%;overflow:hidden;flex-direction:column}
+  .brand{padding:12px 14px}
+  .nav{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;width:100%;flex:0 0 auto;gap:4px;padding:8px 10px;-webkit-overflow-scrolling:touch}
+  .nav a{white-space:nowrap;flex:0 0 auto;border-left:none;border-bottom:3px solid transparent}
+  .nav a.on{border-left:none;border-bottom:3px solid var(--sideact)}
+  .sidefoot{flex-direction:row;flex-wrap:wrap;margin-top:0;border-top:1px solid rgba(255,255,255,.08)}
+  .sidefoot .sbtn{flex:1 1 auto}
+  .hero{padding:14px 16px}
+  .content{padding:14px 14px}
+  .kpis{grid-template-columns:1fr 1fr;gap:10px}
+  .acts{grid-template-columns:1fr 1fr;gap:10px}
+  .chdr{flex-direction:column;align-items:stretch}
+}
+@media(max-width:430px){
+  .kpis{grid-template-columns:1fr}
+  .acts{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
