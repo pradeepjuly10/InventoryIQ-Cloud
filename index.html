@@ -78,6 +78,8 @@ button{font:inherit;cursor:pointer}
 .themepop .sw{width:34px;height:22px;border-radius:7px;flex:none;border:1px solid rgba(0,0,0,.15);box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
 .themepop .tn{font-size:13px;font-weight:700}
 .themepop .td{font-size:10.5px;color:var(--ink3)}
+.demobar{display:none;background:linear-gradient(90deg,#f0a92a,#f0635a);color:#2a1206;font-weight:700;font-size:13.5px;padding:11px 22px;text-align:center}
+body.demo .demobar{display:block}
 .content{padding:18px 22px;flex:1}
 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px}
 .kpi{border-radius:15px;padding:16px;color:#fff;box-shadow:var(--shadow);min-height:118px}
@@ -160,6 +162,8 @@ td.r{text-align:right}
     <label>Password</label><input id="password" type="password" autocomplete="current-password" required>
     <button type="submit" id="loginBtn">Sign in</button>
     <div style="text-align:center;margin-top:12px"><a href="#" id="forgotLink" style="font-size:12px;color:#2f6bf0;text-decoration:none;font-weight:600">Forgot password?</a></div>
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 4px;color:#a4b1c6;font-size:11px"><span style="flex:1;height:1px;background:#e4e9f2"></span>OR<span style="flex:1;height:1px;background:#e4e9f2"></span></div>
+    <button type="button" id="demoBtn" style="width:100%;background:#eef4ff;color:#2f6bf0;border:1.5px solid #cdddff;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">👁 View live demo — no login needed</button>
     <div class="msg" id="loginMsg"></div>
   </form>
   <form class="lcard" id="resetForm" style="display:none">
@@ -191,6 +195,7 @@ td.r{text-align:right}
     </div>
   </aside>
   <div class="main">
+    <div id="demoBanner" class="demobar">👁 You're viewing a <b>DEMO with sample data</b> — explore every feature freely. To see <b>your own factory's numbers</b>, message us on WhatsApp <b>96928&nbsp;70053</b>.</div>
     <header class="hero">
       <div class="ht"><h2 id="pgTitle">Overview</h2><div class="hs" id="pgSub">Stock position · movement · ageing · value</div></div>
       <div class="fl"><label>Plant</label><select id="fPlant"><option value="ALL">All plants</option></select></div>
@@ -450,8 +455,44 @@ function showApp(session){
 async function initAuth(){
   // arriving from a password-reset email?  show the "set new password" screen
   if(/type=recovery/.test(location.hash||"")){ showReset(); return; }
+  if(/[?&]demo\b/.test(location.search||"")){ enterDemo(); return; }   // ?demo link → straight to demo
   try{ const {data}=await sb.auth.getSession(); if(data&&data.session) showApp(data.session); else showLogin(); }
   catch(e){ showLogin(); }
+}
+/* ===== PUBLIC DEMO (sample data, read-only) ===== */
+let DEMO=false;
+function makeDemoData(){
+  const PLANTS=["DemoCo Kandla MFG","DemoCo Rourkela MFG-2","DemoCo Durgapur"];
+  const CATS=["CONCAST REFRACTORY","PCPF & PP","SLIDE GATE REFRACTOR","ZIRCONIA"];
+  const NAMES=["Fired Product (CCR-MBS)","Machined Product (CCR-LSM)","DIP Glaze (CCR-SEN)","Mono Block Stopper","Well Block (WB)","Housing (HB)","Slide Plate","Ladle Nozzle","Ladle Shroud","Tundish Board","Castable Mix","High-Alumina Mortar","Zirconia Brick","Purging Plug"];
+  const now=new Date(), months=[];
+  for(let i=7;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i+1,0);months.push(d.toISOString().slice(0,10));}
+  const inv=[],cons=[],pos=[],prs=[]; let id=1,cid=1,pid=1,rid=1;
+  PLANTS.forEach((p,pi)=>{ NAMES.forEach((nm,k)=>{
+    const cat=CATS[k%4]; let uv=Math.round(150+Math.random()*1400);
+    const basis=(pi===0?2.2:pi===1?1.4:0.7);
+    let qty=Math.round((300+Math.random()*4000)*basis);
+    const use=Math.round((40+Math.random()*700)*basis);
+    const freeze=Math.random()<0.3?Math.floor(Math.random()*5):99;  // some items go idle
+    months.forEach((mo,mi)=>{
+      uv=Math.max(80, uv+Math.round((Math.random()-0.45)*uv*0.05));  // gentle price drift
+      if(mi<=freeze) qty=Math.max(0, qty-Math.round(use*(0.5+Math.random()))+(Math.random()<0.5?Math.round(use*2):0));
+      inv.push({id:id++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),description:nm,plant:p,category:cat,qty:qty,unit_value:uv,value:Math.round(qty*uv),last_movement:null});
+      cons.push({id:cid++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,qty_issued:(mi<=freeze?Math.round(use*(0.5+Math.random())):Math.round(use*0.1))});
+    });
+    if(k%3===0) pos.push({id:pid++,po_no:"PO-"+(5000+pid),item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,po_qty:Math.round(use*4),order_date:months[2],expected_date:(k%2?months[5]:new Date(now.getFullYear(),now.getMonth()+3,15).toISOString().slice(0,10)),status:"Open",value:Math.round(use*4*uv)});
+    if(k%4===0) prs.push({id:rid++,pr_no:"PR-"+(9000+rid),item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,pr_qty:Math.round(use*2),pr_date:months[7],status:"Open"});
+  });});
+  return {inv,cons,pos,prs};
+}
+function enterDemo(){
+  DEMO=true; const d=makeDemoData();
+  ROWS=d.inv; CONS=d.cons; POS=d.pos; PRS=d.prs;
+  computeDerived(); computeCons(); computeMeta();
+  $("#login").style.display="none"; $("#app").classList.add("on"); document.body.classList.add("demo");
+  $("#who").textContent="Demo • sample data"; buildNav(); applyTheme();
+  $("#importBtn").style.display="none"; $("#refreshBtn").style.display="none"; $("#logoutBtn").textContent="Exit demo";
+  buildFilters(); render();
 }
 /* Forgot password → email a reset link */
 $("#forgotLink").onclick=async e=>{
@@ -489,7 +530,10 @@ $("#loginForm").addEventListener("submit",async e=>{
     clearAuthStorage(); setTimeout(()=>location.reload(),900);
   }
 });
-$("#logoutBtn").onclick=async()=>{AUTHED=false;ROWS=[];CONS=[];POS=[];PRS=[];try{await sb.auth.signOut();}catch(e){} showLogin();};
+$("#demoBtn").onclick=()=>enterDemo();
+$("#logoutBtn").onclick=async()=>{
+  if(DEMO){ location.href=location.pathname; return; }   // exit demo → clean login
+  AUTHED=false;ROWS=[];CONS=[];POS=[];PRS=[];try{await sb.auth.signOut();}catch(e){} showLogin();};
 
 /* ===== NAV ===== */
 function buildNav(){
