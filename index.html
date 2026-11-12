@@ -389,7 +389,8 @@ const ALIASES={
   value:["stock value (end period)","stock value","value","amount","total value","closing value","closing val","closing amount","stock amount","inventory value","final","cost"],
   unit_value:["unit value","unit price","price","rate","unit cost","moving avg price","valuation price","map","std price"],
   month:["month","period","snapshot month","period end","as on","as of date","date"],
-  last_movement:["last movement date","last movement","movement date","movement dt","last issue date","last issue","last goods movement","last moved","last txn date"]
+  last_movement:["last movement date","last movement","movement date","movement dt","last issue date","last issue","last goods movement","last moved","last txn date"],
+  variant:["drawing no","drawing number","drawing","drg no","drg","grade","size","dimension","spec","specification","variant","sub item","sub-item","sub item code","batch","heat no","serial","sl no","revision"]
 };
 /* consumption file columns */
 const ALIASES_CONS={
@@ -424,7 +425,7 @@ async function saveMapping(type,map){ MAPPINGS[type]=map;
 }
 /* standard fields per data type, for the mapping table (label, required) */
 const FIELDS={
-  stock:[["item_code","Item / Material code",true],["description","Description",false],["plant","Plant / Location",false],["category","Category / Group",false],["qty","Stock Quantity",true],["value","Stock Value (₹)",false],["unit_value","Unit Price",false],["month","Month / Period",false],["last_movement","Last Movement Date",false]],
+  stock:[["item_code","Item / Material code",true],["description","Description",false],["plant","Plant / Location",false],["category","Category / Group",false],["qty","Stock Quantity",true],["value","Stock Value (₹)",false],["unit_value","Unit Price",false],["month","Month / Period",false],["last_movement","Last Movement Date",false],["variant","Sub-item key, e.g. Drawing No (optional)",false]],
   consumption:[["item_code","Item / Material code",true],["plant","Plant / Location",false],["month","Month / Period",false],["qty_issued","Quantity Issued / Consumed",true],["unit_value","Unit Price / Rate (optional)",false]],
   po:[["item_code","Item / Material code",true],["plant","Plant",false],["po_no","PO Number",false],["po_qty","PO Quantity",false],["order_date","Order Date",false],["expected_date","Expected Date",false],["status","Status",false],["value","PO Value (₹)",false]],
   pr:[["item_code","Item / Material code",true],["plant","Plant",false],["pr_no","PR Number",false],["pr_qty","PR Quantity",false],["pr_date","PR Date",false],["status","Status",false]]
@@ -468,27 +469,57 @@ async function initAuth(){
 /* ===== PUBLIC DEMO (sample data, read-only) ===== */
 let DEMO=false;
 function makeDemoData(){
-  const PLANTS=["Acme North","Acme South","Acme East"];
-  const CATS=["CONCAST REFRACTORY","PCPF & PP","SLIDE GATE REFRACTOR","ZIRCONIA"];
+  const PLANTS=["Acme North","Acme South","Acme East"], BASIS=[2.0,1.3,0.7];
+  const CATS=["Raw Materials","Consumables","Spares & Components","Packaging","Finished Goods"];
   const NAMES=["Fired Product (CCR-MBS)","Machined Product (CCR-LSM)","DIP Glaze (CCR-SEN)","Mono Block Stopper","Well Block (WB)","Housing (HB)","Slide Plate","Ladle Nozzle","Ladle Shroud","Tundish Board","Castable Mix","High-Alumina Mortar","Zirconia Brick","Purging Plug"];
+  const ARCH=["transfer","fast","stockout","excess","slow","transfer","dead","fast","stockout","excess","slow","dead","transfer","fast"];
+  const TREND=["up","vol","down","up","vol","down","up","vol","down","up","vol","down","up","vol"];
+  const CAT_OF=[0,1,2,3,4,1,0,2,3,4,3,2,4,0];
+  const NM=15;                          // 15 months of history so ageing emerges from the data itself
   const now=new Date(), months=[];
-  for(let i=7;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i+1,0);months.push(d.toISOString().slice(0,10));}
-  const inv=[],cons=[],pos=[],prs=[]; let id=1,cid=1,pid=1,rid=1;
-  PLANTS.forEach((p,pi)=>{ NAMES.forEach((nm,k)=>{
-    const cat=CATS[k%4]; let uv=Math.round(150+Math.random()*1400);
-    const basis=(pi===0?2.2:pi===1?1.4:0.7);
-    let qty=Math.round((300+Math.random()*4000)*basis);
-    const use=Math.round((40+Math.random()*700)*basis);
-    const freeze=Math.random()<0.3?Math.floor(Math.random()*5):99;  // some items go idle
+  for(let i=NM-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i+1,0);months.push(d.toISOString().slice(0,10));}
+  const asof=new Date(months[months.length-1]);
+  const dstr=d=>d.toISOString().slice(0,10);
+  const R=(a,b)=>a+Math.random()*(b-a);
+  const inv=[],cons=[],pos=[],prs=[]; let id=1,cid=1,pid=5001,rid=9001;
+  PLANTS.forEach((p,pi)=>{ const b=BASIS[pi]; NAMES.forEach((nm,k)=>{
+    const code="MAT-"+(1000+k), cat=CATS[CAT_OF[k]], trend=TREND[k];
+    let a=ARCH[k]; if(a==="transfer") a=(pi===0?"excess":(pi===2?"stockout":"fast"));
+    const use=Math.max(8,Math.round(R(60,700)*b));
+    let price=Math.round(R(180,1500)), qty=0;
+    if(a==="fast")qty=Math.round(use*2.2); else if(a==="stockout")qty=Math.round(use*1.1);
+    else if(a==="excess")qty=Math.round(use*11); else if(a==="slow")qty=Math.round(use*4); else qty=Math.round(use*6);
+    // last active month index per idle type -> age falls in the right band (derived, no column)
+    const slowCut=[6,11,9][pi];          // slow items: mix of 180-365d and 90-180d
     months.forEach((mo,mi)=>{
-      uv=Math.max(80, uv+Math.round((Math.random()-0.45)*uv*0.05));  // gentle price drift
-      if(mi<=freeze) qty=Math.max(0, qty-Math.round(use*(0.5+Math.random()))+(Math.random()<0.5?Math.round(use*2):0));
-      inv.push({id:id++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),description:nm,plant:p,category:cat,qty:qty,unit_value:uv,value:Math.round(qty*uv),last_movement:null});
-      cons.push({id:cid++,month:mo,item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,qty_issued:(mi<=freeze?Math.round(use*(0.5+Math.random())):Math.round(use*0.1)),unit_value:uv});
+      if(trend==="up")price=Math.round(price*(1+0.018+Math.random()*0.012));
+      else if(trend==="down")price=Math.max(60,Math.round(price*(1-0.018-Math.random()*0.010)));
+      else price=Math.max(60,Math.round(price*(1+(Math.random()-0.5)*0.09)));
+      let issued=0;
+      if(a==="fast"){issued=Math.round(use*R(0.8,1.3));qty-=issued;if(qty<use)qty+=use*3;qty=Math.max(use>>1,qty);}
+      else if(a==="stockout"){issued=Math.round(use*R(0.75,1.15));qty-=issued;if(qty<use*0.4)qty+=Math.round(use*0.8);qty=Math.max(Math.round(use*0.3),qty);}
+      else if(a==="excess"){issued=Math.round(use*R(0.10,0.22));qty=Math.max(0,qty-issued);}
+      else if(a==="slow"){if(mi<=slowCut){issued=Math.round(use*R(0.5,0.9));qty=Math.max(0,qty-issued);}else issued=0;}
+      else if(a==="dead"){issued=0;}     // qty never changes + never issued -> derives as dead (>365d)
+      inv.push({id:id++,month:mo,item_code:code,description:nm,plant:p,category:cat,qty:qty,unit_value:price,value:Math.round(qty*price),last_movement:null});
+      cons.push({id:cid++,month:mo,item_code:code,plant:p,qty_issued:issued,unit_value:price});
     });
-    if(k%3===0) pos.push({id:pid++,po_no:"PO-"+(5000+pid),item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,po_qty:Math.round(use*4),order_date:months[2],expected_date:(k%2?months[5]:new Date(now.getFullYear(),now.getMonth()+3,15).toISOString().slice(0,10)),status:"Open",value:Math.round(use*4*uv)});
-    if(k%4===0) prs.push({id:rid++,pr_no:"PR-"+(9000+rid),item_code:"MAT-"+(pi+1)+"-"+(1000+k),plant:p,pr_qty:Math.round(use*2),pr_date:months[7],status:"Open"});
+    if(a==="excess"){ pos.push({id:pid++,po_no:"PO-"+pid,item_code:code,plant:p,po_qty:use*3,order_date:months[3],expected_date:dstr(new Date(asof.getTime()-Math.round(R(20,70))*864e5)),status:"Open",value:use*3*price});
+                      prs.push({id:rid++,pr_no:"PR-"+rid,item_code:code,plant:p,pr_qty:use*2,pr_date:months[7],status:"Open"}); }
+    else if(a==="fast"||a==="stockout"){ pos.push({id:pid++,po_no:"PO-"+pid,item_code:code,plant:p,po_qty:use*2,order_date:months[6],expected_date:dstr(new Date(asof.getTime()+Math.round(R(15,55))*864e5)),status:"Open",value:use*2*price}); }
+    else if(a==="slow"){ prs.push({id:rid++,pr_no:"PR-"+rid,item_code:code,plant:p,pr_qty:use,pr_date:months[7],status:"Open"}); }
   });});
+  // Variant demo: one Material code (MAT-2000) with two variants — one active, one dead
+  [["VAR-100","active"],["VAR-200","dead"]].forEach(([drg,mode])=>{
+    let price=Math.round(R(600,1400)); const use=220; let qty=mode==="active"?use*2:use*5;
+    months.forEach((mo)=>{
+      price=Math.max(300,Math.round(price*(1+(Math.random()-0.5)*0.05)));
+      let issued=0;
+      if(mode==="active"){issued=Math.round(use*R(0.8,1.2));qty-=issued;if(qty<use)qty+=use*3;qty=Math.max(use>>1,qty);
+        cons.push({id:cid++,month:mo,item_code:"MAT-2000",plant:"Acme North",qty_issued:issued,unit_value:price});}
+      inv.push({id:id++,month:mo,item_code:"MAT-2000",description:"Forged Roll Assembly",plant:"Acme North",category:"Spares & Components",variant:drg,qty:qty,unit_value:price,value:Math.round(qty*price),last_movement:null});
+    });
+  });
   return {inv,cons,pos,prs};
 }
 function enterDemo(){
@@ -571,25 +602,65 @@ async function loadData(){
   try{ const c=await sb.from("consumption").select("*").limit(20000); CONS=(c&&!c.error&&c.data)?c.data:[]; }catch(e){ CONS=[]; }
   try{ const p=await sb.from("purchase_orders").select("*").limit(20000); POS=(p&&!p.error&&p.data)?p.data:[]; }catch(e){ POS=[]; }
   try{ const q=await sb.from("purchase_requests").select("*").limit(20000); PRS=(q&&!q.error&&q.data)?q.data:[]; }catch(e){ PRS=[]; }
-  try{ const st=await sb.from("settings").select("*"); if(st&&!st.error&&st.data) st.data.forEach(r=>{ if(r.key&&r.key.indexOf("colmap_")===0) MAPPINGS[r.key.slice(7)]=r.data; }); }catch(e){}
+  try{ const st=await sb.from("settings").select("*"); if(st&&!st.error&&st.data) st.data.forEach(r=>{ if(r.key&&r.key.indexOf("colmap_")===0) MAPPINGS[r.key.slice(7)]=r.data; else if(r.key==="movebasis"&&r.data&&MOVE_LABELS[r.data.basis]) MOVE_BASIS=r.data.basis; else if(r.key==="idbasis"&&r.data) ID_BASIS=(r.data.basis==="variant"?"variant":"code"); }); }catch(e){}
   computeDerived();computeMeta();computeCons();buildFilters();render();
 }
-/* Derive each item's last-movement date from its monthly snapshots:
-   the latest month in which its quantity changed = it moved then.
-   Mirrors the desktop app, so Ageing works even without a Last Movement column. */
+/* Derive each item's last-movement date from its monthly snapshots — no
+   "Last Movement" column needed (customers rarely have one).
+
+   MOVE_BASIS — which column signals that an item moved in a month:
+     "qty"   – the month its Stock Quantity last changed   (default)
+     "issue" – the last month it had Goods Issued (consumption)
+
+   ID_BASIS — what makes two lines "the same item":
+     "code"    – Material code (+ plant)                   (default)
+     "variant" – Material code + a customer-chosen column (e.g. Drawing No),
+                 for customers whose material code is shared by several real
+                 items that differ by another parameter. The extra column is
+                 mapped on import into the optional "variant" field. */
+const MOVE_LABELS={qty:"Stock Quantity",issue:"Goods Issued"};
+let MOVE_BASIS=(function(){try{const v=localStorage.getItem("iq_movebasis");return MOVE_LABELS[v]?v:"qty";}catch(e){return "qty";}})();
+let ID_BASIS=(function(){try{const v=localStorage.getItem("iq_idbasis");return v==="variant"?"variant":"code";}catch(e){return "code";}})();
+function setMoveBasis(b){ if(!MOVE_LABELS[b])return; MOVE_BASIS=b;
+  try{localStorage.setItem("iq_movebasis",b);}catch(e){}
+  try{ if(typeof sb!=="undefined"&&sb&&!DEMO) sb.from("settings").upsert({key:"movebasis",data:{basis:b},updated_at:new Date().toISOString()}); }catch(e){}
+  computeDerived(); render(); }
+function setIdBasis(b){ ID_BASIS=(b==="variant"?"variant":"code");
+  try{localStorage.setItem("iq_idbasis",ID_BASIS);}catch(e){}
+  try{ if(typeof sb!=="undefined"&&sb&&!DEMO) sb.from("settings").upsert({key:"idbasis",data:{basis:ID_BASIS},updated_at:new Date().toISOString()}); }catch(e){}
+  computeDerived(); render(); }
+function hasVariant(){ return ROWS.some(r=>r.variant!=null&&String(r.variant).trim()!==""); }
+function variantLabel(){ const m=MAPPINGS&&MAPPINGS.stock; if(m&&m.variant)return m.variant; return DEMO?"Variant":"Sub-item"; }
+/* identity key for ageing. Variant only splits stock-based bases (consumption
+   files don't carry the variant column), so "issue" basis ignores it. */
+function akey(r){ const base=(r.item_code||"")+"|"+(r.plant||"");
+  if(ID_BASIS==="variant" && MOVE_BASIS!=="issue"){const v=(r.variant==null?"":String(r.variant).trim());
+    if(v) return (r.item_code||"")+"¦"+v+"|"+(r.plant||"");}
+  return base; }
 let DERIVED={};
 function computeDerived(){
-  DERIVED={};const byKey={};
-  ROWS.forEach(r=>{if(!r.month)return;const k=(r.item_code||"")+"|"+(r.plant||"");(byKey[k]=byKey[k]||[]).push(r);});
+  DERIVED={};
+  if(MOVE_BASIS==="issue"){                       // last month with goods issued
+    const byKey={},mset={};
+    CONS.forEach(c=>{if(!c.month)return;const k=(c.item_code||"")+"|"+(c.plant||"");(byKey[k]=byKey[k]||[]).push(c);mset[c.month]=1;});
+    const floor=Object.keys(mset).sort()[0]||null;
+    Object.keys(byKey).forEach(k=>{
+      const moved=byKey[k].filter(c=>(+c.qty_issued||0)>0).map(c=>c.month).sort();
+      DERIVED[k]=moved.length?moved[moved.length-1]:floor;   // never issued -> idle since first month
+    });
+    return;
+  }
+  const byKey={};                                 // quantity basis, keyed by identity
+  ROWS.forEach(r=>{if(!r.month)return;const k=akey(r);(byKey[k]=byKey[k]||[]).push(r);});
   Object.keys(byKey).forEach(k=>{
     const rs=byKey[k].slice().sort((a,b)=>a.month<b.month?-1:1);
-    if(rs.length<2)return;                       // need history to tell if it moved
-    let last=null,prevQ=null;
-    rs.forEach(r=>{const q=+r.qty||0;if(prevQ!=null&&q!==prevQ)last=r.month;prevQ=q;});
-    DERIVED[k]=last||rs[0].month;                // never changed -> idle since first snapshot (floor)
+    if(rs.length<2)return;                         // need history to tell if it moved
+    let last=null,prev=null;
+    rs.forEach(r=>{const v=+r.qty||0;if(prev!=null&&v!==prev)last=r.month;prev=v;});
+    DERIVED[k]=last||rs[0].month;                  // never changed -> idle since first snapshot (floor)
   });
 }
-function lastMove(r){ return r.last_movement || DERIVED[(r.item_code||"")+"|"+(r.plant||"")] || null; }
+function lastMove(r){ return DERIVED[akey(r)] || r.last_movement || null; }
 function buildFilters(){
   const months=[...new Set(ROWS.map(r=>r.month).filter(Boolean))].sort().reverse();
   const plants=[...new Set(ROWS.map(r=>r.plant).filter(Boolean))].sort();
@@ -679,7 +750,7 @@ function vValue(){
 /* -- Ageing -- */
 function vAgeing(){
   const rows=current(),asOf=asOfDate(rows),hasMove=rows.some(r=>lastMove(r));
-  if(!hasMove){$("#content").innerHTML=needs("movement history","Ageing is worked out from your <b>monthly snapshots</b> (an item moved in the months its quantity changed), or from a <b>Last Movement</b> column if you have one. Import at least <b>two months</b> of stock files and this page fills in automatically.");return;}
+  if(!hasMove){$("#content").innerHTML=needs("movement history","Ageing is worked out automatically from your <b>monthly snapshots</b> — an item has “moved” in any month its stock changed. Import at least <b>two months</b> of stock files and this page fills in on its own. No “Last Movement” column needed.");return;}
   let riskV=0,slowV=0,slowN=0,deadV=0,deadN=0,aged90N=0;
   rows.forEach(r=>{const d=ageDays(r,asOf);if(d==null)return;
     if(d>=AGE_SLOW){slowV+=(+r.value||0);slowN++;aged90N++;}
@@ -692,7 +763,29 @@ function vAgeing(){
   const mvv=mv.map(x=>{let v=0;rows.forEach(r=>{const d=ageDays(r,asOf);if(d!=null&&d>=x[1]&&d<x[2])v+=(+r.value||0);});return [x[0],v];});
   const healthyV=rows.reduce((s,r)=>{const d=ageDays(r,asOf);return s+((d!=null&&d<AGE_SLOW)?(+r.value||0):0);},0);
   const lk=(c,k,v,d)=>`<div class="kpi ${c}"><div class="k">${k}</div><div class="v num">${v}</div><div class="d">${d}</div></div>`;
+  const movedBy=MOVE_BASIS==="issue"?"had goods issued (&gt; 0)":"changed vs the previous month";
+  const vlab=variantLabel(), vOn=ID_BASIS==="variant", hasVar=hasVariant();
+  const idRow = hasVar ? `
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px">
+        <b>Identify an item by:</b>
+        <div class="tabs" id="idTabs">
+          <button data-i="code" class="${!vOn?'on':''}">Material code</button>
+          <button data-i="variant" class="${vOn?'on':''}" ${MOVE_BASIS==='issue'?'disabled title="Switch age basis to Stock Quantity to use the sub-item column"':''}>Material code + ${vlab}</button>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:6px">Use <b>Material code + ${vlab}</b> when one material code covers several different items — they age separately instead of being merged.</div>` : "";
   $("#content").innerHTML=`
+    <div class="card" style="padding:12px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <b>Decide stock age by:</b>
+        <div class="tabs" id="basisTabs">
+          <button data-b="qty" class="${MOVE_BASIS==='qty'?'on':''}">Stock Quantity</button>
+          <button data-b="issue" class="${MOVE_BASIS==='issue'?'on':''}" ${hasCons()?'':'disabled title="Import consumption data to use this"'}>Goods Issued</button>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">An item counts as <b>moved</b> in a month when its <b>${MOVE_LABELS[MOVE_BASIS]}</b> ${movedBy}. Age = time since its last movement — read automatically from your monthly files, no “Last Movement” column needed. <b>Stock Quantity works from your stock files alone</b>; Goods Issued is optional (only needed if you prefer to base ageing on consumption).</div>
+      ${idRow}
+    </div>
     <div class="kpis light">
       ${lk("b-red","Value at risk",rupee(riskV),"no movement > "+AGE_RISK+"d")}
       ${lk("b-purple","Slow / Non-moving",rupee(slowV),inr(slowN)+" items · > "+AGE_SLOW+"d")}
@@ -708,6 +801,8 @@ function vAgeing(){
       <tbody>${(()=>{const T=buck.reduce((s,b)=>s+b.v,0)||1;return buck.map(b=>`<tr><td>${b.lb}</td><td class="r num">${inr(b.n)}</td><td class="r num">${inr(b.v)}</td><td class="r num">${(b.v/T*100).toFixed(1)}%</td></tr>`).join("");})()}</tbody></table></div>
       <div class="note">Items idle more than <b>${AGE_RISK} days</b> are strong candidates to redeploy, liquidate, or stop re-ordering.</div></div>`;
   barsC("#cAge",buck.map(b=>[b.lb,b.v,b.col])); donutD("#cMove",mvv,mv.map(x=>x[3]));
+  $("#basisTabs")?.querySelectorAll("button").forEach(b=>b.onclick=()=>{if(!b.disabled)setMoveBasis(b.dataset.b);});
+  $("#idTabs")?.querySelectorAll("button").forEach(b=>b.onclick=()=>{if(!b.disabled)setIdBasis(b.dataset.i);});
 }
 
 /* -- Stock Position -- */
@@ -1163,9 +1258,10 @@ async function runImport(type,arr,headers,col,replace,remember){
   for(let i=1;i<arr.length;i++){const row=arr[i];const code=String(get(row,"item_code")??"").trim();
     if(!code||code.toLowerCase().startsWith("example"))continue;
     if(type==="stock"){const qty=n2(get(row,"qty")),uv=n2(get(row,"unit_value"));let val=n2(get(row,"value"));if(!val&&uv)val=qty*uv;
-      rows.push({month:toDate(get(row,"month")),item_code:code,description:String(get(row,"description")??"").trim(),
+      const sr={month:toDate(get(row,"month")),item_code:code,description:String(get(row,"description")??"").trim(),
         plant:String(get(row,"plant")??"").trim()||null,category:String(get(row,"category")??"").trim()||null,
-        qty:qty,unit_value:uv,value:val,last_movement:toDate(get(row,"last_movement"))});}
+        qty:qty,unit_value:uv,value:val,last_movement:toDate(get(row,"last_movement"))};
+      const vv=String(get(row,"variant")??"").trim(); if(vv)sr.variant=vv; rows.push(sr);}
     else if(type==="consumption"){const cr={month:toDate(get(row,"month")),item_code:code,
         plant:String(get(row,"plant")??"").trim()||null,qty_issued:n2(get(row,"qty_issued"))};
         const crate=n2(get(row,"unit_value")); if(crate>0)cr.unit_value=crate; rows.push(cr);}
